@@ -1,5 +1,7 @@
 manifestVersion: 1.1
 id: bitcoin-roots
+implements:
+  - bitcoin
 storage:
   dataRoot: data
 category: bitcoin
@@ -8,16 +10,74 @@ version: '1.4.0-roots.1'
 tagline: Run your personal Bitcoin Roots node
 description: >-
   Validate Bitcoin with Bitcoin Roots, with a browser interface for node settings,
-  synchronization, and peer connections. Includes Tor and I2P connectivity.
-  Onion connection addresses are available in the Connect panel after Tor starts.
+  synchronization, and peer connections. Includes persistent Tor and I2P connectivity;
+  onion connection addresses are available in the Connect panel after Tor starts.
+
+
+  Declares Umbrel Bitcoin node compatibility (implements: bitcoin) so apps such as
+  Core Lightning, LND, Electrs, and Bassin can select Bitcoin Roots as their Bitcoin
+  node provider. Uses dedicated host ports (P2P 10333, RPC 10332, Web UI 2111) so it
+  can run alongside Bitcoin Core or Bitcoin Knots for side-by-side chain migration.
 developer: Plan-B Foundation
 website: https://plan-b.foundation/bitcoin-roots
 dependencies: []
 repo: https://github.com/tiero/umbrel-bitcoin-roots
 support: https://github.com/tiero/umbrel-bitcoin-roots/issues
-port: 2105
+port: 2111
 gallery: []
 path: ''
 defaultPassword: ''
 releaseNotes: >-
-  Initial Bitcoin Roots package with persistent Tor services and tested container builds.
+  Adds Umbrel Bitcoin provider compatibility (implements: bitcoin and canonical
+  APP_BITCOIN_* exports), moves P2P/RPC/UI ports to 10333/10332/2111 for side-by-side
+  coexistence with Bitcoin Core and Bitcoin Knots, and fixes I2P data permissions.
+widgets:
+  - id: 'stats'
+    type: 'four-stats'
+    refresh: '5s'
+    endpoint: 'app:3000/api/widget/stats'
+    link: ''
+    example:
+      type: 'four-stats'
+      link: ''
+      items:
+        - title: 'Connections'
+          text: '11'
+          subtext: 'peers'
+        - title: 'Mempool'
+          text: '257'
+          subtext: 'MB'
+        - title: 'Hashrate'
+          text: '590'
+          subtext: 'EH/s'
+        - title: 'Blockchain size'
+          text: '600'
+          subtext: 'GB'
+  - id: 'sync'
+    type: 'text-with-progress'
+    refresh: '2s'
+    endpoint: 'app:3000/api/widget/sync'
+    link: ''
+    example:
+      type: 'text-with-progress'
+      link: ''
+      title: 'Blockchain sync'
+      text: '83%'
+      progressLabel: 'In progress'
+      progress: 0.83
+backupIgnore:
+  - data/bitcoin/blocks
+  - data/bitcoin/chainstate
+  - data/bitcoin/indexes
+  - data/bitcoin/testnet3/blocks
+  - data/bitcoin/testnet3/chainstate
+  - data/bitcoin/testnet3/indexes
+  - data/bitcoin/testnet4/blocks
+  - data/bitcoin/testnet4/chainstate
+  - data/bitcoin/testnet4/indexes
+  - data/bitcoin/signet/blocks
+  - data/bitcoin/signet/chainstate
+  - data/bitcoin/signet/indexes
+  - data/bitcoin/regtest/blocks
+  - data/bitcoin/regtest/chainstate
+  - data/bitcoin/regtest/indexes

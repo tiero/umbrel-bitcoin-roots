@@ -12,8 +12,8 @@ services:
     restart: on-failure
     stop_grace_period: 15m30s
     ports:
-      - '8333:8333'
-      - '8332:8332'
+      - '${APP_BITCOIN_ROOTS_P2P_PORT}:${APP_BITCOIN_ROOTS_P2P_PORT}'
+      - '${APP_BITCOIN_ROOTS_RPC_PORT}:${APP_BITCOIN_ROOTS_RPC_PORT}'
     depends_on:
       tor:
         condition: service_healthy
@@ -24,9 +24,15 @@ services:
       BITCOIND_IP: ${APP_BITCOIN_ROOTS_NODE_IP}
       RPC_USER: ${APP_BITCOIN_ROOTS_RPC_USER}
       RPC_PASS: ${APP_BITCOIN_ROOTS_RPC_PASS}
-      P2P_PORT: 8333
-      RPC_PORT: 8332
-      TOR_PORT: 8334
+      P2P_PORT: ${APP_BITCOIN_ROOTS_P2P_PORT}
+      P2P_WHITEBIND_PORT: ${APP_BITCOIN_ROOTS_P2P_WHITEBIND_PORT}
+      RPC_PORT: ${APP_BITCOIN_ROOTS_RPC_PORT}
+      TOR_PORT: ${APP_BITCOIN_ROOTS_TOR_PORT}
+      ZMQ_RAWBLOCK_PORT: ${APP_BITCOIN_ROOTS_ZMQ_RAWBLOCK_PORT}
+      ZMQ_RAWTX_PORT: ${APP_BITCOIN_ROOTS_ZMQ_RAWTX_PORT}
+      ZMQ_HASHBLOCK_PORT: ${APP_BITCOIN_ROOTS_ZMQ_HASHBLOCK_PORT}
+      ZMQ_SEQUENCE_PORT: ${APP_BITCOIN_ROOTS_ZMQ_SEQUENCE_PORT}
+      ZMQ_HASHTX_PORT: ${APP_BITCOIN_ROOTS_ZMQ_HASHTX_PORT}
       TOR_HOST: ${APP_BITCOIN_ROOTS_TOR_IP}
       TOR_SOCKS_PORT: 9050
       TOR_CONTROL_PORT: 9051
@@ -47,6 +53,7 @@ services:
     environment:
       TOR_CONTROL_PASSWORD: ${APP_BITCOIN_ROOTS_TOR_PASSWORD}
       BITCOIND_IP: ${APP_BITCOIN_ROOTS_NODE_IP}
+      RPC_PORT: ${APP_BITCOIN_ROOTS_RPC_PORT}
     volumes:
       - ${APP_DATA_DIR}/hooks/tor-entrypoint.sh:/scripts/tor-entrypoint.sh:ro
       - ${APP_DATA_DIR}/data:/data
@@ -60,6 +67,7 @@ services:
         ipv4_address: ${APP_BITCOIN_ROOTS_TOR_IP}
   i2p:
     image: purplei2p/i2pd:release-2.59.0@sha256:257653c18ce0b127ef480e3d8373b3ddbf1495e842674c8cfc59909be0015979
+    user: 'root'
     restart: on-failure
     command: --sam.enabled=true --sam.address=0.0.0.0 --sam.port=7656 --loglevel=error
     volumes:

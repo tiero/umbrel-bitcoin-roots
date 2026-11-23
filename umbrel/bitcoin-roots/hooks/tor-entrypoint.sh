@@ -4,8 +4,10 @@ umask 077
 
 : "${TOR_CONTROL_PASSWORD:?Tor control password is required}"
 : "${BITCOIND_IP:?Bitcoin address is required}"
+RPC_PORT="${RPC_PORT:-10332}"
 [[ "$TOR_CONTROL_PASSWORD" =~ ^[a-zA-Z0-9]+$ ]] || exit 1
 [[ "$BITCOIND_IP" =~ ^[0-9.]+$ ]] || exit 1
+[[ "$RPC_PORT" =~ ^[0-9]+$ ]] || exit 1
 
 mkdir -p /data/tor
 chmod 700 /data/tor
@@ -21,6 +23,6 @@ Log notice stdout
 HiddenServiceDir /data/tor/p2p
 HiddenServicePort 8333 $BITCOIND_IP:8334
 HiddenServiceDir /data/tor/rpc
-HiddenServicePort 8332 $BITCOIND_IP:8332
+HiddenServicePort 8332 $BITCOIND_IP:$RPC_PORT
 EOF
 exec tor -f /tmp/roots-torrc
