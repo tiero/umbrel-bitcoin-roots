@@ -10,6 +10,7 @@ import {restart} from '../bitcoind/bitcoind.js'
 import {
 	DefaultValuesForVersion,
 	LATEST,
+	VERSION_CHOICES,
 	resolveVersion,
 	schemaForVersion,
 	settingsMetadataForVersion,
@@ -99,7 +100,16 @@ async function loadAndValidateSettings(): Promise<SettingsSchema> {
 		;(partial as Record<string, unknown>)['chain'] = process.env['DEFAULT_CHAIN']
 	}
 
-	const selectedVersion = (partial?.version as SelectedVersion) ?? LATEST
+	// If a previously pinned version is no longer bundled in this image, fall back to LATEST
+	const rawVersion = partial?.version
+	const selectedVersion: SelectedVersion =
+		typeof rawVersion === 'string' && (VERSION_CHOICES as readonly string[]).includes(rawVersion)
+			? (rawVersion as SelectedVersion)
+			: LATEST
+	if (rawVersion && rawVersion !== selectedVersion) {
+		console.warn(`[config] Pinned version "${rawVersion}" is not bundled; migrating to "${selectedVersion}".`)
+		;(partial as Record<string, unknown>)['version'] = selectedVersion
+	}
 	const merged = mergeWithDefaults(partial)
 	const filtered = filterSettingsForVersion(merged as Record<string, unknown>, selectedVersion)
 	return schemaForVersion(selectedVersion).parse(filtered) as SettingsSchema

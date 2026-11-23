@@ -8,7 +8,7 @@
 // IMPORTANT:
 // - Any version added here needs to be added in the Dockerfile
 // - The array of versions must be newest → oldest. We do a simple index comparison to compare versions, so lower index = newer.
-export const AVAILABLE_BITCOIN_CORE_VERSIONS = ['v30.3-roots.1'] as const
+export const AVAILABLE_BITCOIN_CORE_VERSIONS = ['v32.1-roots.2'] as const
 
 // Default Bitcoin Roots version used by bitcoind manager (always the newest version in the array)
 export const DEFAULT_BITCOIN_CORE_VERSION = AVAILABLE_BITCOIN_CORE_VERSIONS[0]
@@ -504,7 +504,7 @@ export const settingsMetadata = {
 		description:
 			'Allow apps on your Umbrel to connect to Bitcoin Core over its IPC mining interface. This is required for Stratum V2 apps to request block templates and submit mined blocks from your node.',
 		subDescription:
-			'Requires Bitcoin Roots v30.3-roots.1 or newer. This uses the multiprocess mode and experimental IPC interface inherited from Bitcoin Core. Leave this disabled unless an app you use requires it.',
+			'Requires Bitcoin Roots v32.1-roots.2 or newer. This uses the multiprocess mode and experimental IPC interface inherited from Bitcoin Core. Leave this disabled unless an app you use requires it.',
 		default: false,
 	},
 
