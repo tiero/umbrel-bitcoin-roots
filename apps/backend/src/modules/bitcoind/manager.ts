@@ -97,7 +97,15 @@ type BitcoindManagerOptions = {
 export function parseBinaryVersionLine(firstLine: string): {implementation: string; version: string} {
 	const trimmed = firstLine.trim()
 	if (!trimmed) return {implementation: 'unknown', version: 'unknown'}
-	const implementation = trimmed.replace(/(?:daemon|RPC client)?\s*version.*$/i, '').trim() || 'unknown'
+	const versionIdx = trimmed.search(/\bversion\b/i)
+	let implementation = (versionIdx >= 0 ? trimmed.slice(0, versionIdx) : trimmed).trim()
+	const lower = implementation.toLowerCase()
+	if (lower.endsWith(' rpc client')) {
+		implementation = implementation.slice(0, -' rpc client'.length).trim()
+	} else if (lower.endsWith(' daemon')) {
+		implementation = implementation.slice(0, -' daemon'.length).trim()
+	}
+	implementation = implementation || 'unknown'
 	const version = (trimmed.match(/v\d+\.\d+(?:\.\d+)?(?:-[\w.-]+)?/) ?? ['unknown'])[0]
 	return {implementation, version}
 }
