@@ -212,12 +212,12 @@ export async function list(limit = 200): Promise<Block[]> {
 const newBlockEmitter = new EventEmitter()
 
 let processing = false
-let fullPrimeComplete = false
 
 // Bitcoin Core's ZMQ block notifiers are silent during IBD, so this only fires
 // when IBD is complete. During post-IBD catch-up (blocks < headers), we skip
-// until the node reaches the tip. Once at the tip, we fetch the new block by
-// hash, cache it, and broadcast to WebSocket clients.
+// until the node reaches the tip. When UI clients are connected, fetch verbosity 2
+// for the cube transactionGrid; when idle (no UI open), use lightweight getblockstats
+// (~1 KB instead of multi-MB decoded block JSON) to avoid V8 heap spikes.
 blockStream.on('block', async (hash: string) => {
 	if (processing) return
 	processing = true
@@ -225,21 +225,15 @@ blockStream.on('block', async (hash: string) => {
 		const {blocks, headers} = await rpcClient.command<{blocks: number; headers: number}>('getblockchaininfo')
 		if (blocks !== headers) return // still catching up, skip
 
-		// Fetch full block (verbosity 2) — just one block, and we need transactionGrid
-		const raw = await rpcClient.command<RawBlock>('getblock', hash, 2)
-		const block = rawToBlock(raw)
+		const hasListeners = newBlockEmitter.listenerCount('block') > 0
+		const block = hasListeners
+			? rawToBlock(await rpcClient.command<RawBlock>('getblock', hash, 2))
+			: statsToBlock(await rpcClient.command<BlockStats>('getblockstats', hash))
 		blockCache.set(block.height, block)
 		evictOldEntries()
 
-		// Broadcast to WebSocket clients
-		newBlockEmitter.emit('block', block)
-
-		// On first at-tip event after startup/IBD, prime the full cache in background
-		// so the insights page has 200 blocks ready
-		if (!fullPrimeComplete) {
-			fullPrimeComplete = true
-			console.log('[blocks] at tip, priming full cache in background')
-			list(CACHE_DEPTH).catch((err) => console.error('[blocks] background prime error:', err))
+		if (hasListeners) {
+			newBlockEmitter.emit('block', block)
 		}
 	} catch (err) {
 		console.error('[blocks] ZMQ handler error:', err)
@@ -263,10 +257,9 @@ export function wsStream(socket: WebSocket) {
 }
 
 // --- Cache prime ---
-// Prime the cache so frontend requests are fast once the node is synced.
-// If already synced, prime the full 200 blocks via getblockstats (lightweight).
-// If in IBD/catch-up, prime just 5 blocks — the full prime happens when the
-// first ZMQ at-tip event arrives.
+// Prime only the 5 most recent blocks via lightweight getblockstats at startup.
+// Larger ranges (e.g. 200 blocks for Insights charts) and full transactionGrids are
+// populated on demand when the user opens the UI, keeping idle RAM minimal.
 
 let priming = false
 
@@ -275,11 +268,9 @@ async function prime() {
 	priming = true
 	try {
 		await setTimeout(5000) // wait for bitcoind to be ready
-		const {blocks, headers} = await rpcClient.command<{blocks: number; headers: number}>('getblockchaininfo')
-		const atTip = blocks === headers
-		if (atTip) fullPrimeComplete = true
-		console.log(`[blocks] prime: ${atTip ? CACHE_DEPTH : 5} blocks (${atTip ? 'synced' : 'not synced'})`)
-		await list(atTip ? CACHE_DEPTH : 5)
+		const tipHeight = await rpcClient.command<number>('getblockcount')
+		const count = Math.min(5, tipHeight + 1)
+		await Promise.all(Array.from({length: count}, (_, i) => rpcQueue.add(() => getBlockLight(tipHeight - i))))
 	} finally {
 		priming = false
 	}
@@ -287,7 +278,6 @@ async function prime() {
 
 function reset() {
 	blockCache.clear()
-	fullPrimeComplete = false
 	processing = false
 	priming = false
 }

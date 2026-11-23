@@ -42,7 +42,9 @@ export function sliceLast24h<T extends {height: number; time: number}>(rows: T[]
 export function findClosestDataPoint<T>(data: T[], target: number, getKey: (item: T) => number): T | null {
 	if (!data.length) return null
 
-	return data.reduce((closest, current) =>
-		Math.abs(getKey(current) - target) < Math.abs(getKey(closest) - target) ? current : closest,
+	return data.reduce(
+		(closest, current) =>
+			Math.abs(getKey(current) - target) < Math.abs(getKey(closest) - target) ? current : closest,
+		data[0],
 	)
 }

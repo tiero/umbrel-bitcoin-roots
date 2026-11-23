@@ -144,9 +144,10 @@ export const columns: ColumnDef<PeerRow>[] = [
 function SortableHeader<T>({header, children}: {header: Header<T, unknown>; children: React.ReactNode}) {
 	const dir = header.column.getIsSorted() // 'asc' | 'desc' | false
 	return (
-		<div
+		<button
+			type='button'
 			onClick={header.column.getToggleSortingHandler()}
-			className='flex items-center gap-2 cursor-pointer text-[#757575] hover:text-white text-[13px] font-[400]'
+			className='flex items-center gap-2 cursor-pointer text-[#757575] hover:text-white text-[13px] font-[400] bg-transparent border-0 p-0'
 		>
 			{children}
 			{dir === 'asc' ? (
@@ -157,7 +158,7 @@ function SortableHeader<T>({header, children}: {header: Header<T, unknown>; chil
 				// keeps width stable
 				<ChevronUp className='h-4 w-4 opacity-0' />
 			)}
-		</div>
+		</button>
 	)
 }
 

@@ -1,5 +1,6 @@
 import {spawn, ChildProcessWithoutNullStreams, execFileSync} from 'node:child_process'
 import {EventEmitter} from 'node:events'
+import {renameSync, rmSync, symlinkSync} from 'node:fs'
 import {Readable} from 'node:stream'
 import readline from 'node:readline'
 import fse from 'fs-extra'
@@ -215,8 +216,11 @@ export class BitcoindManager {
 			return
 		}
 
-		// flip the single pointer used by both daemon and CLI
-		execFileSync('ln', ['-sfn', `${BITCOIN_CORE_VERSIONS_DIR}/${version}`, BITCOIN_CORE_CURRENT_SYMLINK])
+		// flip the single pointer used by both daemon and CLI atomically without spawning a shell binary
+		const tmpSymlink = `${BITCOIN_CORE_CURRENT_SYMLINK}.tmp-${process.pid}`
+		rmSync(tmpSymlink, {force: true})
+		symlinkSync(`${BITCOIN_CORE_VERSIONS_DIR}/${version}`, tmpSymlink)
+		renameSync(tmpSymlink, BITCOIN_CORE_CURRENT_SYMLINK)
 
 		const command = this.startCommand(ipcEnabled)
 

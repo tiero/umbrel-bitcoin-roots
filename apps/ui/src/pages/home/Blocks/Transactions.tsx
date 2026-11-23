@@ -34,7 +34,7 @@ function packSquares(squares: number[], gridSize: number): TetrisSquare[] {
 	}
 
 	// Loop through squares, largest first
-	for (const size of squares.sort().reverse()) {
+	for (const size of [...squares].sort((a, b) => b - a)) {
 		const position = findPosition(size)
 		if (position) placedSquares.push({...position, size})
 	}
@@ -343,7 +343,7 @@ export function Transactions({
 	useFrame((state, delta) => {
 		// Smooth transitions
 		const targetBlur = isHovered ? 3.0 : 10
-		const targetBrightness = isHovered ? 1 : 1
+		const targetBrightness = 1
 		const targetGradientInvert = isHovered ? 1.0 : 0.0
 
 		// Ease the values

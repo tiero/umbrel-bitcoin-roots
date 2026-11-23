@@ -30,7 +30,7 @@ RUN set -eux; \
       arm64) roots_arch='aarch64'; roots_sha512='fa84500586028c625968e7de9c9a3533016ae8295c50af4bc28e26464d0161fda31bf4fd6f13e23c2072d9107a5b6410ad7d378cb5c32004cab58602fab9f201' ;; \
       *) echo "Unsupported TARGETARCH: ${TARGETARCH}" >&2; exit 1 ;; \
     esac; \
-    curl -fsSL -o /tmp/bitcoin-roots.tar.gz "https://github.com/LuganoPlanB/bitcoin-roots/releases/download/v${ROOTS_VERSION}/bitcoin-roots-linux-${roots_arch}.tar.gz"; \
+    curl --proto '=https' --tlsv1.2 -fsSL -o /tmp/bitcoin-roots.tar.gz "https://github.com/LuganoPlanB/bitcoin-roots/releases/download/v${ROOTS_VERSION}/bitcoin-roots-linux-${roots_arch}.tar.gz"; \
     echo "${roots_sha512}  /tmp/bitcoin-roots.tar.gz" | sha512sum -c -; \
     tar -xzf /tmp/bitcoin-roots.tar.gz -C /tmp; \
     install -Dm0755 "/tmp/bitcoin-roots-${ROOTS_VERSION}/bin/bitcoind" /bin/bitcoind; \
@@ -53,7 +53,7 @@ COPY package*.json ./
 COPY apps/backend/package*.json apps/backend/
 COPY apps/ui/package*.json apps/ui/
 
-RUN npm ci --workspaces --include-workspace-root --install-strategy=hoisted
+RUN npm ci --workspaces --include-workspace-root --install-strategy=hoisted --ignore-scripts
 
 # Add npm binaries to PATH so subsequent stages can invoke tsc / vite / etc.
 ENV PATH="/repo/node_modules/.bin:$PATH"
@@ -127,9 +127,12 @@ WORKDIR /app
 # Note: import-map lives in package.json, so is also needed so Node can resolve "#settings/#types"
 COPY package*.json ./
 COPY apps/backend/package*.json apps/backend/
-# npm is only needed to install dependencies; remove it from the production image to reduce runtime attack surface.
+# npm is only needed to install dependencies; remove it and unused GeoIP tables from the production image.
 RUN npm ci --omit=dev --install-strategy=hoisted --ignore-scripts \
- && rm -rf /root/.npm /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
+ && rm -rf /root/.npm /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx \
+    /app/node_modules/geoip-lite/data/geoip-city-names.dat \
+    /app/node_modules/geoip-lite/data/geoip-country.dat \
+    /app/node_modules/geoip-lite/data/geoip-country6.dat
 
 # Backend JS bundle
 COPY --from=app-builder /repo/apps/backend/dist ./dist
@@ -174,6 +177,7 @@ RUN mkdir -p /home/node \
  && chown -h 1000:1000 /home/node/.bitcoin
 
 ENV NODE_ENV=production
+ENV NODE_OPTIONS="--max-old-space-size=192"
 
 # Data dirs inside /data
 ENV BITCOIN_DIR=/data/bitcoin
@@ -183,5 +187,7 @@ ENV APP_STATE_DIR=/data/app
 EXPOSE 3000 8332 8333
 # app and bitcoind data
 VOLUME /data
+
+USER node
 
 CMD ["node", "dist/server.js"]

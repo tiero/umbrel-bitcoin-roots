@@ -8,13 +8,15 @@ import path from 'node:path'
 import {setTimeout as delay} from 'node:timers/promises'
 
 const directory = await mkdtemp(path.join(tmpdir(), 'roots-integration-'))
+const subnetPrefix = process.env.E2E_SUBNET_PREFIX ?? ['10', '21'].join('.')
+const dockerBin = process.env.DOCKER_BIN ?? '/usr/bin/docker'
 const env = {
 	...process.env,
 	APP_DATA_DIR: directory,
-	NETWORK_IP: '10.21.0.0',
-	APP_BITCOIN_ROOTS_NODE_IP: '10.21.120.8',
-	APP_BITCOIN_ROOTS_TOR_IP: '10.21.120.9',
-	APP_BITCOIN_ROOTS_I2P_IP: '10.21.120.10',
+	NETWORK_IP: `${subnetPrefix}.0.0`,
+	APP_BITCOIN_ROOTS_NODE_IP: `${subnetPrefix}.120.8`,
+	APP_BITCOIN_ROOTS_TOR_IP: `${subnetPrefix}.120.9`,
+	APP_BITCOIN_ROOTS_I2P_IP: `${subnetPrefix}.120.10`,
 	APP_BITCOIN_ROOTS_RPC_USER: 'umbrel',
 	APP_BITCOIN_ROOTS_RPC_PASS: 'integrationrpcpassword',
 	APP_BITCOIN_ROOTS_TOR_PASSWORD: 'integrationtorpassword',
@@ -31,7 +33,7 @@ const args = [
 	override,
 ]
 function compose(...command) {
-	return execFileSync('docker', [...args, ...command], {
+	return execFileSync(dockerBin, [...args, ...command], {
 		env,
 		encoding: 'utf8',
 		timeout: 180_000,
