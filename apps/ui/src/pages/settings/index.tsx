@@ -574,6 +574,7 @@ export default function SettingsCard() {
 	// This array drives both the tab triggers (navigation) and tab content rendering
 	const tabs = [
 		{value: 'peers', label: 'Peer Settings'},
+		{value: 'policy', label: 'Relay & Mining Policy'},
 		{value: 'optimization', label: 'Optimization'},
 		{value: 'rpc-rest', label: 'Interfaces'},
 		{value: 'network', label: 'Network Selection'},

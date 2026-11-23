@@ -19,7 +19,7 @@ export const VERSION_CHOICES = [LATEST, ...AVAILABLE_BITCOIN_CORE_VERSIONS] as c
 export type SelectedVersion = (typeof VERSION_CHOICES)[number]
 
 // Tabs for organization (used in the UI to group settings)
-export type Tab = 'peers' | 'optimization' | 'rpc-rest' | 'network' | 'version' | 'advanced'
+export type Tab = 'peers' | 'policy' | 'optimization' | 'rpc-rest' | 'network' | 'version' | 'advanced'
 
 interface BaseOption {
 	tab: Tab
@@ -346,23 +346,23 @@ export const settingsMetadata = {
 		disabledMessage: 'automatically disabled when pruning is enabled',
 	},
 
-	// mempoolfullrbf - no longer an option as of Core 28.0.0
-
+	/* ===== Relay & Mining Policy tab ===== */
 	datacarrier: {
-		tab: 'optimization',
+		tab: 'policy',
 		kind: 'toggle',
-		label: 'Relay Transactions Containing Arbitrary Data',
+		label: 'Relay Data Carrier Transactions',
 		bitcoinLabel: 'datacarrier',
-		description: 'Relay transactions with OP_RETURN outputs.',
+		description: 'Relay and mine transactions containing data-carrier outputs (such as OP_RETURN).',
 		default: true,
 	},
 
 	datacarriersize: {
-		tab: 'optimization',
+		tab: 'policy',
 		kind: 'number',
-		label: 'Max Allowed Size of Arbitrary Data in Transactions',
+		label: 'Max Allowed Size of Data Carrier Outputs',
 		bitcoinLabel: 'datacarriersize',
-		description: 'Set the maximum size of the data in OP_RETURN outputs (in bytes) that your node will relay.',
+		description:
+			'Set the maximum aggregate size (in bytes) of data-carrying scriptPubKeys that your node will relay and mine.',
 		subDescription: 'Note: datacarrier must be enabled for this setting to take effect.',
 		// Bitcoin Roots restores the pre-v30 conservative default of 83 bytes on the Core v30.3 base
 		// (Bitcoin Core v30 raised the default to 100_000). The limit remains configurable up to the Core v30 max.
@@ -370,17 +370,314 @@ export const settingsMetadata = {
 		default: 83,
 		min: 0,
 		max: 100_000,
+		step: 1,
 		unit: 'bytes',
 	},
 
+	datacarriercost: {
+		tab: 'policy',
+		kind: 'number',
+		label: 'Data Carrier Policy Weight Multiplier',
+		bitcoinLabel: 'datacarriercost',
+		description:
+			'Treat each detected data-carrier byte as at least this many policy vbytes (rounded up to quarters of a vbyte). Raising this discourages data-heavy transactions relative to monetary payments.',
+		default: 1,
+		min: 0,
+		max: 1_000_000,
+		step: 0.25,
+		unit: 'vB/B',
+	},
+
+	datacarrierfullcount: {
+		tab: 'policy',
+		kind: 'toggle',
+		label: 'Count All Data-Carrier Methods Toward Limit',
+		bitcoinLabel: 'datacarrierfullcount',
+		description: 'Apply the datacarriersize limit across all recognized data-carrier encodings, not only OP_RETURN.',
+		default: true,
+	},
+
+	acceptnonstddatacarrier: {
+		tab: 'policy',
+		kind: 'toggle',
+		label: 'Accept Non-Standard Data Carrier Outputs',
+		bitcoinLabel: 'acceptnonstddatacarrier',
+		description: 'Relay and mine transactions with non-standard data-carrier outputs.',
+		default: false,
+	},
+
+	permitbaredatacarrier: {
+		tab: 'policy',
+		kind: 'toggle',
+		label: 'Permit Bare Data Carrier Outputs',
+		bitcoinLabel: 'permitbaredatacarrier',
+		description: 'Relay data-carrier outputs that do not use OP_RETURN.',
+		default: false,
+	},
+
+	rejectparasites: {
+		tab: 'policy',
+		kind: 'toggle',
+		label: 'Reject Parasitic Overlay Protocols',
+		bitcoinLabel: 'rejectparasites',
+		description: 'Refuse to relay or mine transactions identified as parasitic overlay protocols (such as CAT21).',
+		default: true,
+	},
+
+	rejecttokens: {
+		tab: 'policy',
+		kind: 'toggle',
+		label: 'Reject Non-Bitcoin Token Transactions',
+		bitcoinLabel: 'rejecttokens',
+		description: 'Refuse to relay or mine transactions carrying non-bitcoin token protocols (such as Runes).',
+		default: false,
+	},
+
 	permitbaremultisig: {
-		tab: 'peers',
+		tab: 'policy',
 		kind: 'toggle',
 		label: 'Relay Bare Multisig Transactions',
 		bitcoinLabel: 'permitbaremultisig',
-		description: 'Relay non-P2SH multisig transactions.',
+		description: 'Relay transactions creating non-P2SH bare multisig outputs.',
 		// Bitcoin Roots disables bare-multisig (and bare-pubkey) relay by default; Bitcoin Core defaults to true.
 		default: false,
+	},
+
+	permitbarepubkey: {
+		tab: 'policy',
+		kind: 'toggle',
+		label: 'Relay Bare Pubkey Transactions',
+		bitcoinLabel: 'permitbarepubkey',
+		description: 'Relay legacy bare pay-to-pubkey (P2PK) outputs.',
+		default: false,
+	},
+
+	permitbareanchor: {
+		tab: 'policy',
+		kind: 'toggle',
+		label: 'Relay Bare Ephemeral Anchor Transactions',
+		bitcoinLabel: 'permitbareanchor',
+		description: 'Relay transactions that only have ephemeral anchor outputs.',
+		default: true,
+	},
+
+	permitephemeral: {
+		tab: 'policy',
+		kind: 'multi',
+		label: 'Permit Ephemeral Policy Exceptions',
+		bitcoinLabel: 'permitephemeral',
+		description: 'Select which ephemeral output policy exceptions are permitted during mempool admission and relay.',
+		options: [
+			{value: 'anchor', label: 'Anchor'},
+			{value: 'dust', label: 'Dust'},
+			{value: 'send', label: 'Send'},
+		],
+		default: ['anchor'],
+		requireAtLeastOne: false,
+	},
+
+	acceptunknownwitness: {
+		tab: 'policy',
+		kind: 'toggle',
+		label: 'Accept Unknown Witness Versions',
+		bitcoinLabel: 'acceptunknownwitness',
+		description: 'Relay transactions sending to unknown or future SegWit script versions.',
+		default: true,
+	},
+
+	mempoolreplacement: {
+		tab: 'policy',
+		kind: 'select',
+		label: 'Replace-By-Fee (RBF) Policy',
+		bitcoinLabel: 'mempoolreplacement',
+		description:
+			'Control input-conflict replacement in the mempool: Full RBF allows replacing any unconfirmed transaction by fee, Opt-in RBF honors BIP125 / TRUC signaling, and Disabled rejects input-conflict replacements.',
+		options: [
+			{value: 'fee,-optin', label: 'Full RBF (fee,-optin)'},
+			{value: 'fee,optin', label: 'Opt-in RBF (fee,optin)'},
+			{value: '0', label: 'Disabled (0)'},
+		],
+		default: 'fee,-optin',
+	},
+
+	mempooltruc: {
+		tab: 'policy',
+		kind: 'select',
+		label: 'TRUC (v3 Transaction) Policy',
+		bitcoinLabel: 'mempooltruc',
+		description:
+			'Select how your node handles TRUC (version 3) transactions: enforce TRUC rules, accept without enforcing, or reject.',
+		options: [
+			{value: 'enforce', label: 'Enforce'},
+			{value: 'accept', label: 'Accept'},
+			{value: 'reject', label: 'Reject'},
+		],
+		default: 'enforce',
+	},
+
+	spkreuse: {
+		tab: 'policy',
+		kind: 'select',
+		label: 'Script Reuse Policy',
+		bitcoinLabel: 'spkreuse',
+		description:
+			'Control how your node treats unconfirmed transactions reusing the same output scriptPubKey: Allow permits reuse, while Conflict treats script reuse as a conflict.',
+		options: [
+			{value: 'allow', label: 'Allow'},
+			{value: 'conflict', label: 'Reject conflicts'},
+		],
+		default: 'allow',
+	},
+
+	maxscriptsize: {
+		tab: 'policy',
+		kind: 'number',
+		label: 'Maximum Script & Witness Size',
+		bitcoinLabel: 'maxscriptsize',
+		description: 'Maximum size of scripts (including the witness stack) your node will relay and mine.',
+		default: 1650,
+		min: 0,
+		max: 4_294_967_295,
+		step: 1,
+		unit: 'bytes',
+	},
+
+	bytespersigop: {
+		tab: 'policy',
+		kind: 'number',
+		label: 'Equivalent Bytes per SigOp',
+		bitcoinLabel: 'bytespersigop',
+		description: 'Equivalent virtual bytes counted per signature operation for relay and mining.',
+		default: 20,
+		min: 0,
+		max: 4_294_967_295,
+		step: 1,
+		unit: 'B/sigop',
+	},
+
+	bytespersigopstrict: {
+		tab: 'policy',
+		kind: 'number',
+		label: 'Strict Minimum Bytes per SigOp',
+		bitcoinLabel: 'bytespersigopstrict',
+		description: 'Minimum bytes per signature operation required in transactions your node relays and mines.',
+		default: 20,
+		min: 0,
+		max: 4_294_967_295,
+		step: 1,
+		unit: 'B/sigop',
+	},
+
+	maxtxlegacysigops: {
+		tab: 'policy',
+		kind: 'number',
+		label: 'Maximum Legacy SigOps per Transaction',
+		bitcoinLabel: 'maxtxlegacysigops',
+		description: 'Maximum number of legacy signature operations allowed in a single transaction for relay and mining.',
+		default: 2500,
+		min: 0,
+		max: 4_294_967_295,
+		step: 1,
+		unit: 'sigops',
+	},
+
+	subdustfeepenalty: {
+		tab: 'policy',
+		kind: 'toggle',
+		label: 'Sub-Dust Fee Penalty',
+		bitcoinLabel: 'subdustfeepenalty',
+		description: 'Subtract output dust deficits from modified policy fees during relay and mining selection.',
+		default: true,
+	},
+
+	dustdynamic: {
+		tab: 'policy',
+		kind: 'select',
+		label: 'Dynamic Dust Fee Rate',
+		bitcoinLabel: 'dustdynamic',
+		description:
+			'Automatically raise the dust threshold based on estimated confirmation fees (target blocks) or your mempool fee rate at a given depth (kvB).',
+		options: [
+			{value: 'off', label: 'Off'},
+			{value: 'target:2', label: 'Target 2 blocks'},
+			{value: 'target:6', label: 'Target 6 blocks'},
+			{value: 'target:12', label: 'Target 12 blocks'},
+			{value: 'target:24', label: 'Target 24 blocks'},
+			{value: 'mempool:1000', label: 'Mempool top 1,000 kvB'},
+			{value: 'mempool:5000', label: 'Mempool top 5,000 kvB'},
+			{value: 'mempool:10000', label: 'Mempool top 10,000 kvB'},
+		],
+		default: 'off',
+	},
+
+	minrelaycoinblocks: {
+		tab: 'policy',
+		kind: 'number',
+		label: 'Minimum Coin-Blocks to Relay',
+		bitcoinLabel: 'minrelaycoinblocks',
+		description:
+			'Minimum coin-blocks (BTC × blocks confirmed) a transaction must spend to be relayed. Set to 0 to disable.',
+		default: 0,
+		min: 0,
+		max: 1_000_000_000,
+		step: 1,
+		unit: 'coin-blocks',
+	},
+
+	minrelaymaturity: {
+		tab: 'policy',
+		kind: 'number',
+		label: 'Minimum Input Maturity to Relay',
+		bitcoinLabel: 'minrelaymaturity',
+		description:
+			'Minimum number of confirmations required for spent inputs before relaying a transaction. Set to 0 to disable.',
+		default: 0,
+		min: 0,
+		max: 1_000_000,
+		step: 1,
+		unit: 'blocks',
+	},
+
+	blockmaxsize: {
+		tab: 'policy',
+		kind: 'number',
+		label: 'Maximum Block Template Serialized Size',
+		bitcoinLabel: 'blockmaxsize',
+		description:
+			'Maximum serialized size (in bytes) of generated block templates. Default 4,000,000 leaves weight controlled by blockmaxweight.',
+		default: 4_000_000,
+		min: 1_000,
+		max: 4_000_000,
+		step: 1,
+		unit: 'bytes',
+	},
+
+	blockmaxweight: {
+		tab: 'policy',
+		kind: 'number',
+		label: 'Maximum Block Template Weight',
+		bitcoinLabel: 'blockmaxweight',
+		description:
+			'Maximum BIP141 weight (in weight units) of generated block templates. Bitcoin Roots defaults to 1,200,000 WU (300 kB equivalent); consensus maximum is 4,000,000 WU.',
+		default: 1_200_000,
+		min: 8_000,
+		max: 4_000_000,
+		step: 1,
+		unit: 'WU',
+	},
+
+	blockprioritysize: {
+		tab: 'policy',
+		kind: 'number',
+		label: 'Block Template Priority Area Size',
+		bitcoinLabel: 'blockprioritysize',
+		description:
+			'Maximum size (in bytes) reserved for high-priority / coin-age transactions in generated block templates.',
+		default: 100_000,
+		min: 0,
+		max: 4_000_000,
+		step: 1,
+		unit: 'bytes',
 	},
 
 	maxmempool: {

@@ -145,6 +145,18 @@ function generateBaseConfLines(settings: SettingsSchema): string[] {
 				break
 			}
 
+			// "permitephemeral": serialize explicit anchor/dust/send flags so omitted tokens never trigger implicit defaults
+			case 'permitephemeral': {
+				const allowed = new Set(value as string[])
+				if (allowed.size === 0) {
+					lines.push('permitephemeral=0')
+				} else {
+					const tokens = (['anchor', 'dust', 'send'] as const).map((flag) => (allowed.has(flag) ? flag : `-${flag}`))
+					lines.push(`permitephemeral=${tokens.join(',')}`)
+				}
+				break
+			}
+
 			// Core treats asmap=0 as a filename, so omit the option when disabled
 			case 'asmap': {
 				if (value) lines.push('asmap=1')

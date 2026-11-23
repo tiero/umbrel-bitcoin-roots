@@ -119,11 +119,20 @@ await exchange(9051, 'AUTHENTICATE "' + process.env.TOR_CONTROL_PASSWORD + '"\\r
 		assert.match(result.rpc.tor.host, /^[a-z2-7]{56}\.onion$/)
 		return result
 	})
-	// Use the real settings API to enable incoming Tor and proxy clearnet traffic.
+	// Use the real settings API to enable incoming Tor, proxy clearnet traffic, and apply strict Roots policy filters.
 	node(`const r = await fetch('http://127.0.0.1:3000/api/config/settings', {
   method: 'PATCH', headers: {'Content-Type': 'application/json'},
-  body: JSON.stringify({listen: ['tor'], proxy: true})
-}); if (!r.ok) throw new Error('Settings HTTP ' + r.status);`)
+  body: JSON.stringify({
+    listen: ['tor'],
+    proxy: true,
+    datacarrier: false,
+    rejecttokens: true,
+    rejectparasites: true,
+    permitbaremultisig: false,
+    mempoolreplacement: '0',
+    permitephemeral: [],
+  })
+}); if (!r.ok) throw new Error('Settings HTTP ' + r.status + ': ' + await r.text());`)
 	await until(() => {
 		const updated = rpc('getnetworkinfo')
 		assert.equal(updated.networks.find((entry) => entry.name === 'ipv4').proxy, '10.21.120.9:9050')
@@ -131,7 +140,12 @@ await exchange(9051, 'AUTHENTICATE "' + process.env.TOR_CONTROL_PASSWORD + '"\\r
 	node(`import {readFileSync} from 'node:fs'; import assert from 'node:assert/strict';
 const conf = readFileSync('/data/bitcoin/umbrel-bitcoin.conf', 'utf8');
 assert.ok(conf.includes('torcontrol=10.21.120.9:9051'));
-assert.ok(conf.includes('listenonion=1'));`)
+assert.ok(conf.includes('listenonion=1'));
+assert.ok(conf.includes('datacarrier=0'));
+assert.ok(conf.includes('rejecttokens=1'));
+assert.ok(conf.includes('rejectparasites=1'));
+assert.ok(conf.includes('mempoolreplacement=0'));
+assert.ok(conf.includes('permitephemeral=0'));`)
 	compose('restart', 'tor')
 	await until(() =>
 		assert.equal(compose('exec', '-T', 'tor', 'cat', '/data/tor/p2p/hostname').trim(), first.p2p.tor.host),

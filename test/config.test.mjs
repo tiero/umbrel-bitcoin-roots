@@ -55,3 +55,76 @@ test('clearnet proxy is opt-in and removed when Tor is disabled', async () => {
 	assert.ok(!lines.some((line) => /^(proxy|onion|torcontrol|torpassword)=/.test(line)))
 	assert.ok(lines.includes('listenonion=0'))
 })
+
+test('default Bitcoin Roots relay and mining policy options are written', async () => {
+	const lines = await configure({})
+	for (const expected of [
+		'datacarrier=1',
+		'datacarriersize=83',
+		'datacarriercost=1',
+		'datacarrierfullcount=1',
+		'acceptnonstddatacarrier=0',
+		'permitbaredatacarrier=0',
+		'rejectparasites=1',
+		'rejecttokens=0',
+		'permitbaremultisig=0',
+		'permitbarepubkey=0',
+		'permitbareanchor=1',
+		'permitephemeral=anchor,-dust,-send',
+		'acceptunknownwitness=1',
+		'mempoolreplacement=fee,-optin',
+		'mempooltruc=enforce',
+		'spkreuse=allow',
+		'maxscriptsize=1650',
+		'bytespersigop=20',
+		'bytespersigopstrict=20',
+		'maxtxlegacysigops=2500',
+		'subdustfeepenalty=1',
+		'dustdynamic=off',
+		'minrelaycoinblocks=0',
+		'minrelaymaturity=0',
+		'blockmaxsize=4000000',
+		'blockmaxweight=1200000',
+		'blockprioritysize=100000',
+	]) {
+		assert.ok(lines.includes(expected), `missing ${expected}`)
+	}
+})
+
+test('strict filtering and ephemeral policy overrides serialize cleanly', async () => {
+	let lines = await configure({
+		datacarrier: false,
+		datacarriercost: 2.5,
+		rejecttokens: true,
+		rejectparasites: true,
+		permitbaremultisig: false,
+		mempoolreplacement: '0',
+		mempooltruc: 'reject',
+		spkreuse: 'conflict',
+		permitephemeral: [],
+		dustdynamic: 'target:6',
+		blockmaxsize: 1_000_000,
+		blockmaxweight: 4_000_000,
+		blockprioritysize: 50_000,
+	})
+	for (const expected of [
+		'datacarrier=0',
+		'datacarriercost=2.5',
+		'rejecttokens=1',
+		'rejectparasites=1',
+		'permitbaremultisig=0',
+		'mempoolreplacement=0',
+		'mempooltruc=reject',
+		'spkreuse=conflict',
+		'permitephemeral=0',
+		'dustdynamic=target:6',
+		'blockmaxsize=1000000',
+		'blockmaxweight=4000000',
+		'blockprioritysize=50000',
+	]) {
+		assert.ok(lines.includes(expected), `missing ${expected}`)
+	}
+
+	lines = await configure({permitephemeral: ['dust']})
+	assert.ok(lines.includes('permitephemeral=-anchor,dust,-send'))
+})
