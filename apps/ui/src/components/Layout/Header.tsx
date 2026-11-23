@@ -12,31 +12,31 @@ import {useBitcoindVersion} from '@/hooks/useBitcoind'
 export default function Header({className}: {className?: string}) {
 	const {data: version, isLoading, isError} = useBitcoindVersion()
 
-	// placeholder text to prevent layout shift and fall back on error
-	const placeholder = 'Bitcoin Core'
-
-	// Remove the 'v' prefix from the version string if it exists
-	const cleanedVersion = version?.version?.replace(/^v/i, '')
-	const fullVersionString = `${placeholder} ${cleanedVersion ?? ''}`
+	const fallbackName = 'Bitcoin Roots'
+	const implementation =
+		version?.implementation && version.implementation !== 'unknown' ? version.implementation : fallbackName
+	const cleanedVersion =
+		version?.version && version.version !== 'unknown' ? version.version.replace(/^v/i, '') : undefined
+	const fullVersionString = cleanedVersion ? `${implementation} ${cleanedVersion}` : implementation
 
 	return (
 		<header className={cn('flex items-end md:items-center justify-between mb-6 md:mb-8 w-full', className)}>
 			<div className='flex flex-row items-center gap-2.5 md:gap-3.5'>
-				<Logo aria-label='Bitcoin Node logo' className='w-[50px] md:w-[60px] h-[50px] md:h-[60px] shrink-0' />
+				<Logo aria-label='Bitcoin Roots logo' className='w-[50px] md:w-[60px] h-[50px] md:h-[60px] shrink-0' />
 				<div>
-					<h1 className='font-outfit text-[22px] md:text-[28px] font-[400] bg-text-gradient bg-clip-text text-transparent leading-none pb-1'>
-						Bitcoin Node
+					<h1 className='font-outfit text-[22px] md:text-[28px] font-[500] bg-roots-heading-gradient bg-clip-text text-transparent leading-none pb-1'>
+						Bitcoin Roots
 					</h1>
 
 					{/* We gracefully handle loading and error states for no layout shift */}
-					<p className='text-[14px] md:text-[16px] leading-none font-[400] text-white/35'>
+					<p className='text-[14px] md:text-[16px] leading-none font-[400] text-white/60'>
 						<span
 							className={clsx(
 								'inline-block transition-opacity duration-500 ease-in-out',
 								isLoading ? 'opacity-0 select-none' : 'opacity-100',
 							)}
 						>
-							{isLoading || isError ? placeholder : fullVersionString}
+							{isLoading || isError ? fallbackName : fullVersionString}
 						</span>
 					</p>
 				</div>

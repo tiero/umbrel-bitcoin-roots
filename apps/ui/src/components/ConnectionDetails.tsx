@@ -41,10 +41,9 @@ export default function ConnectionDetails() {
 	return (
 		<Dialog>
 			<DialogTrigger asChild>
-				<Button className='cursor-pointer rounded-full bg-button-gradient backdrop-blur-xl'>
-					<GradientBorderFromTop />
-					<WalletIcon className='w-5 h-5 text-[#969696]' />
-					<span className='text-[13px] text-white/80 font-[500]'>Connect</span>
+				<Button className='cursor-pointer rounded-full bg-[#F7931A] hover:bg-[#FF9F2D] text-[#171717] border border-[#FF9F2D]/40 shadow-[0_6px_20px_rgba(247,147,26,0.28)] transition-colors'>
+					<WalletIcon className='w-5 h-5 text-[#171717]' />
+					<span className='text-[13px] text-[#171717] font-[600]'>Connect</span>
 				</Button>
 			</DialogTrigger>
 			<DialogContent
@@ -60,8 +59,8 @@ export default function ConnectionDetails() {
 				<DialogHeader>
 					<DialogTitle className='font-outfit text-white text-[20px] font-[400] text-left'>
 						<div className='flex items-center gap-2'>
-							<WalletIcon className='w-5 h-5 text-white' />
-							Connect to Bitcoin Node
+							<WalletIcon className='w-5 h-5 text-[#F7931A]' />
+							Connect to Bitcoin Roots
 						</div>
 					</DialogTitle>
 					<DialogDescription className='text-white/60 text-left text-[13px]'>

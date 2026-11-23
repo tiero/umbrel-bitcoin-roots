@@ -94,6 +94,14 @@ type BitcoindManagerOptions = {
 	extraArgs?: string[]
 }
 
+export function parseBinaryVersionLine(firstLine: string): {implementation: string; version: string} {
+	const trimmed = firstLine.trim()
+	if (!trimmed) return {implementation: 'unknown', version: 'unknown'}
+	const implementation = trimmed.replace(/(?:daemon|RPC client)?\s*version.*$/i, '').trim() || 'unknown'
+	const version = (trimmed.match(/v\d+\.\d+(?:\.\d+)?(?:-[\w.-]+)?/) ?? ['unknown'])[0]
+	return {implementation, version}
+}
+
 export class BitcoindManager {
 	private child: ChildProcessWithoutNullStreams | null = null
 	private readonly bin: string
@@ -162,9 +170,7 @@ export class BitcoindManager {
 	private getBinaryVersionInfo(binary = this.bin) {
 		try {
 			const firstLine = execFileSync(binary, ['--version']).toString().split('\n')[0]
-			const implementation = firstLine.replace(/(?:daemon|RPC client)?\s*version.*$/i, '').trim()
-			const version = (firstLine.match(/v\d+\.\d+\.\d+/) ?? ['unknown'])[0]
-			return {implementation, version}
+			return parseBinaryVersionLine(firstLine)
 		} catch {
 			return {implementation: 'unknown', version: 'unknown'}
 		}

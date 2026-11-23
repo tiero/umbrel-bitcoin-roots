@@ -1,15 +1,15 @@
 {
-	"name": "Bitcoin Node",
-	"short_name": "Bitcoin Node",
-	"description": "Bitcoin Node",
+	"name": "Bitcoin Roots",
+	"short_name": "Bitcoin Roots",
+	"description": "Bitcoin Roots",
 	"dir": "auto",
 	"lang": "en-US",
 	"display": "standalone",
 	"orientation": "any",
 	"start_url": "/",
 	"scope": "/",
-	"background_color": "#000000",
-	"theme_color": "#000000",
+	"background_color": "#171717",
+	"theme_color": "#171717",
 	"icons": [
 		{
 			"src": "/favicons/android-chrome-192x192.png",

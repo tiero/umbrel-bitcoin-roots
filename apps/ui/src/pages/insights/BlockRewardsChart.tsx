@@ -12,8 +12,8 @@ import {syncStage} from '@/lib/sync-progress'
 import {useSyncStatus} from '@/hooks/useSyncStatus'
 
 const SERIES = {
-	subsidy: {label: 'Subsidy', color: 'hsla(29,100%,51%,0.44)'},
-	fees: {label: 'Fees', color: '#FF7E05'},
+	subsidy: {label: 'Subsidy', color: 'rgba(225,83,100,0.55)'},
+	fees: {label: 'Fees', color: '#F7931A'},
 } as const
 
 export default function RewardsChart() {
@@ -60,8 +60,8 @@ export default function RewardsChart() {
 					{/* Gradient definitions */}
 					<defs>
 						<linearGradient id={fillId} x1='0' y1='0' x2='0' y2='1'>
-							<stop offset='0%' stopColor='rgba(255,126,5,0.44)' />
-							<stop offset='86.44%' stopColor='rgba(255,126,5,0)' />
+							<stop offset='0%' stopColor='rgba(225,83,100,0.55)' />
+							<stop offset='86.44%' stopColor='rgba(225,83,100,0)' />
 						</linearGradient>
 					</defs>
 
@@ -94,13 +94,13 @@ export default function RewardsChart() {
 
 									{/* Rewards breakdown */}
 									<div className='flex items-center gap-2'>
-										<div className='h-2 w-2 rounded-[2px]' style={{backgroundColor: 'hsla(29,100%,51%,0.44)'}} />
+										<div className='h-2 w-2 rounded-[2px]' style={{backgroundColor: 'rgba(225,83,100,0.55)'}} />
 										<span className='text-white/60'>Subsidy</span>
 										<span className='ml-auto font-mono tabular-nums'>{d.subsidyBTC.toFixed(3)}</span>
 									</div>
 
 									<div className='flex items-center gap-2'>
-										<div className='h-2 w-2 rounded-[2px]' style={{backgroundColor: '#FF7E05'}} />
+										<div className='h-2 w-2 rounded-[2px]' style={{backgroundColor: '#F7931A'}} />
 										<span className='text-white/60'>Fees</span>
 										<span className='ml-auto font-mono tabular-nums'>{d.feesBTC.toFixed(3)}</span>
 									</div>
@@ -130,7 +130,7 @@ export default function RewardsChart() {
 						isAnimationActive={false}
 						barSize={10}
 					/>
-					<Bar dataKey='feesBTC' stackId='a' fill='#FF7E05' radius={[2, 2, 0, 0]} isAnimationActive={false} />
+					<Bar dataKey='feesBTC' stackId='a' fill='#F7931A' radius={[2, 2, 0, 0]} isAnimationActive={false} />
 				</BarChart>
 			</ChartContainer>
 		</ChartCard>

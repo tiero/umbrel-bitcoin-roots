@@ -112,7 +112,7 @@ function SettingsTabTrigger({
 	return (
 		<TabsTrigger
 			value={value}
-			className='relative text-[12px] bg-transparent border-none data-[state=active]:text-white data-[state=active]:bg-transparent data-[state=inactive]:text-white/60 focus-visible:outline-none focus:outline-none focus:ring-0 rounded-none hover:text-white/80 transition-none pb-3 after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[1.5px] after:bg-transparent data-[state=active]:after:bg-white'
+			className='relative text-[12px] bg-transparent border-none data-[state=active]:text-[#FF9F2D] data-[state=active]:bg-transparent data-[state=inactive]:text-white/60 focus-visible:outline-none focus:outline-none focus:ring-0 rounded-none hover:text-white/80 transition-none pb-3 after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[1.5px] after:bg-transparent data-[state=active]:after:bg-[#F7931A]'
 		>
 			{children}
 
@@ -483,7 +483,7 @@ export default function SettingsCard() {
 	const onUpdateSettings = (data: SettingsSchema) => {
 		// If the mutation takes longer than 1 second, we show a loading toast
 		updateTimer.current = setTimeout(() => {
-			updateToastId.current = toast.loading('Hang tight, Bitcoin Core is restarting...', {duration: Infinity})
+			updateToastId.current = toast.loading('Hang tight, Bitcoin Roots is restarting...', {duration: Infinity})
 		}, 1000)
 
 		updateSettings.mutate(data, {
@@ -520,7 +520,7 @@ export default function SettingsCard() {
 	const onRestoreDefaults = () => {
 		// If the mutation takes longer than 1 second, we show a loading toast
 		restoreTimer.current = setTimeout(() => {
-			restoreToastId.current = toast.loading('Hang tight, Bitcoin Core is restarting...', {duration: Infinity})
+			restoreToastId.current = toast.loading('Hang tight, Bitcoin Roots is restarting...', {duration: Infinity})
 		}, 1000)
 
 		restoreDefaults.mutate(undefined, {
@@ -577,7 +577,7 @@ export default function SettingsCard() {
 		{value: 'optimization', label: 'Optimization'},
 		{value: 'rpc-rest', label: 'Interfaces'},
 		{value: 'network', label: 'Network Selection'},
-		{value: 'version', label: 'Bitcoin Core Version'},
+		{value: 'version', label: 'Bitcoin Roots Version'},
 		{value: 'advanced', label: 'Advanced'},
 	] as const
 
