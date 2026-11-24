@@ -10,13 +10,19 @@ description: >-
   Validate Bitcoin with Bitcoin Roots, with a browser interface for node settings,
   synchronization, and peer connections. Includes Tor and I2P connectivity.
   Onion connection addresses are available in the Connect panel after Tor starts.
+
+  The home screenshot illustrates completed sync; its sync status and block heights were edited for the gallery.
+
 developer: Plan-B Foundation
 website: https://plan-b.foundation/bitcoin-roots
 dependencies: []
 repo: https://github.com/tiero/umbrel-bitcoin-roots
 support: https://github.com/tiero/umbrel-bitcoin-roots/issues
 port: 2105
-gallery: []
+gallery:
+  - https://raw.githubusercontent.com/tiero/umbrel-bitcoin-roots/master/umbrel/bitcoin-roots/gallery_1.png
+  - https://raw.githubusercontent.com/tiero/umbrel-bitcoin-roots/master/umbrel/bitcoin-roots/gallery_2.png
+  - https://raw.githubusercontent.com/tiero/umbrel-bitcoin-roots/master/umbrel/bitcoin-roots/gallery_3.png
 path: ''
 defaultPassword: ''
 releaseNotes: >-
