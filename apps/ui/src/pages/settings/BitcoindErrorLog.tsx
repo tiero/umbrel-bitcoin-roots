@@ -105,9 +105,7 @@ export default function BitcoindErrorLog({
 					{/* scrollable log viewer with FadeScrollArea */}
 					<FadeScrollArea
 						ref={fadeScrollRef}
-						className='h-60 rounded bg-black/55 font-mono text-xs
-						           [--fade-top:rgba(0,0,0,0.4)] [--fade-bottom:rgba(0,0,0,0.4)]
-						           [&_[data-orientation="vertical"]]:mr-0'
+						className='h-60 rounded bg-black/55 font-mono text-xs [&_[data-orientation="vertical"]]:mr-0'
 					>
 						<div className='p-3 pr-1'>
 							{visibleLines.map((line, i) => (

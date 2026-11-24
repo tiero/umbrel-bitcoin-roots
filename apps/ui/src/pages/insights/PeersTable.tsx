@@ -242,17 +242,13 @@ export default function PeersTable() {
 					onChange={(event) => setGlobalFilter(event.target.value)}
 					className='max-w-xs mb-4 border-none bg-[#272727] shadow-[inset_0_-1px_1px_0_rgba(255,255,255,0.2),_inset_0_1px_1px_0_rgba(0,0,0,0.36)] text-white placeholder:text-white/50 focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-white/10'
 				></Input>
-				<FadeScrollArea
-					className='h-[350px]
-             [--fade-top:hsla(0,0%,6%,1)]
-             [--fade-bottom:hsla(0,0%,3%,1)]'
-				>
+				<FadeScrollArea className='h-[350px]'>
 					<div className='rounded-md'>
 						<Table>
 							<TableHeader>
 								{table.getHeaderGroups().map((headerGroup) => (
 									<TableRow
-										className='border-b border-[#252525] bg-[#0B0B0B] hover:bg-[#0B0B0B] shadow-[inset_0_4px_4px_0_rgba(0,0,0,0.5)]'
+										className='border-b border-white/10 bg-[#1B1717] hover:bg-[#1B1717] shadow-[inset_0_4px_4px_0_rgba(0,0,0,0.35)]'
 										key={headerGroup.id}
 									>
 										{headerGroup.headers.map((header) => {

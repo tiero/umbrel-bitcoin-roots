@@ -29,6 +29,7 @@ import {
 
 import {GradientBorderFromTop} from '@/components/shared/GradientBorders'
 import FadeScrollArea from '@/components/shared/FadeScrollArea'
+import HorizontalFadeScroll from '@/components/shared/HorizontalFadeScroll'
 import {Form} from './Form'
 import Toggle from './Toggle'
 import InputField from './InputField'
@@ -573,11 +574,11 @@ export default function SettingsCard() {
 
 	// This array drives both the tab triggers (navigation) and tab content rendering
 	const tabs = [
-		{value: 'peers', label: 'Peer Settings'},
+		{value: 'peers', label: 'Peers'},
 		{value: 'optimization', label: 'Optimization'},
 		{value: 'rpc-rest', label: 'Interfaces'},
-		{value: 'network', label: 'Network Selection'},
-		{value: 'version', label: 'Bitcoin Roots Version'},
+		{value: 'network', label: 'Network'},
+		{value: 'version', label: 'Version'},
 		{value: 'advanced', label: 'Advanced'},
 	] as const
 
@@ -618,8 +619,8 @@ export default function SettingsCard() {
 										isSearching && 'opacity-0 pointer-events-none select-none',
 									)}
 								>
-									<FadeScrollArea className='w-full'>
-										<TabsList className='relative flex bg-transparent rounded-none h-auto p-0 gap-1 z-10 w-max'>
+									<HorizontalFadeScroll className='w-full'>
+										<TabsList className='relative flex bg-transparent rounded-none h-auto p-0 gap-2 z-10 w-max'>
 											{/* Render tab triggers dynamically from the tabs configuration */}
 											{tabs.map((tab) => (
 												<SettingsTabTrigger
@@ -634,7 +635,7 @@ export default function SettingsCard() {
 												</SettingsTabTrigger>
 											))}
 										</TabsList>
-									</FadeScrollArea>
+									</HorizontalFadeScroll>
 								</div>
 
 								{/* TabsContent for each category */}
@@ -642,7 +643,7 @@ export default function SettingsCard() {
 								<FadeScrollArea
 									// We use a key to reset scroll position when switching tabs or search
 									key={isSearching ? 'search' : currentTab}
-									className='h-[calc(100dvh-425px)] md:h-[calc(100dvh-390px)] [--fade-top:hsla(0,0%,6%,1)][--fade-bottom:hsla(0,0%,3%,1)]'
+									className='h-[calc(100dvh-425px)] md:h-[calc(100dvh-390px)]'
 									viewportRef={(el) => {
 										settingsViewportRef.current = el
 									}}
