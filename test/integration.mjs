@@ -15,6 +15,15 @@ const env = {
 	APP_BITCOIN_ROOTS_NODE_IP: '10.21.120.8',
 	APP_BITCOIN_ROOTS_TOR_IP: '10.21.120.9',
 	APP_BITCOIN_ROOTS_I2P_IP: '10.21.120.10',
+	APP_BITCOIN_ROOTS_P2P_PORT: '8333',
+	APP_BITCOIN_ROOTS_P2P_WHITEBIND_PORT: '8335',
+	APP_BITCOIN_ROOTS_RPC_PORT: '8332',
+	APP_BITCOIN_ROOTS_TOR_PORT: '8334',
+	APP_BITCOIN_ROOTS_ZMQ_RAWBLOCK_PORT: '28332',
+	APP_BITCOIN_ROOTS_ZMQ_RAWTX_PORT: '28333',
+	APP_BITCOIN_ROOTS_ZMQ_HASHBLOCK_PORT: '28334',
+	APP_BITCOIN_ROOTS_ZMQ_SEQUENCE_PORT: '28335',
+	APP_BITCOIN_ROOTS_ZMQ_HASHTX_PORT: '28336',
 	APP_BITCOIN_ROOTS_RPC_USER: 'umbrel',
 	APP_BITCOIN_ROOTS_RPC_PASS: 'integrationrpcpassword',
 	APP_BITCOIN_ROOTS_TOR_PASSWORD: 'integrationtorpassword',
@@ -41,7 +50,9 @@ function compose(...command) {
 const node = (code) => compose('exec', '-T', 'app', 'node', '--input-type=module', '-e', code)
 // The Umbrel package keeps RPC on 8332 even when the test selects regtest.
 const rpc = (method) =>
-	JSON.parse(compose('exec', '-T', 'app', 'bitcoin-cli', '-datadir=/data/bitcoin', '-regtest', '-rpcport=8332', method))
+	JSON.parse(
+		compose('exec', '-T', 'app', 'bitcoin-cli', '-datadir=/data/bitcoin', '-regtest', '-rpcport=8332', method),
+	)
 
 async function until(check) {
 	let failure
@@ -79,8 +90,12 @@ networks:
 `,
 	)
 	compose('config', '--quiet')
-	compose('up', '-d', 'app')
+	compose('up', '-d', 'app', 'i2p')
 	await until(() => assert.equal(rpc('getblockchaininfo').chain, 'regtest'))
+	const torrc = compose('exec', '-T', 'tor', 'cat', '/tmp/roots-torrc')
+	assert.ok(torrc.includes('HiddenServicePort 8332 10.21.120.8:8332'))
+	const i2pState = compose('ps', '--format', '{{.State}}', 'i2p').trim()
+	assert.equal(i2pState, 'running')
 	const network = rpc('getnetworkinfo')
 	const onion = network.networks.find((entry) => entry.name === 'onion')
 	assert.equal(onion.proxy, '10.21.120.9:9050')
