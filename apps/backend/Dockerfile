@@ -18,16 +18,16 @@
 # architecture. Checksums are the SHA-512 digests published in the release's
 # signed SHA512SUMS manifest.
 # https://github.com/LuganoPlanB/bitcoin-roots
-FROM --platform=$BUILDPLATFORM debian:bookworm-slim AS bitcoind_30_3_roots_1
+FROM --platform=$BUILDPLATFORM debian:bookworm-slim AS bitcoind_32_1_roots_2
 ARG TARGETARCH
-ARG ROOTS_VERSION=30.3-roots.1
+ARG ROOTS_VERSION=32.1-roots.2
 RUN apt-get update \
  && apt-get install -y --no-install-recommends ca-certificates curl \
  && rm -rf /var/lib/apt/lists/*
 RUN set -eux; \
     case "${TARGETARCH}" in \
-      amd64) roots_arch='x86_64';  roots_sha512='9aa635a2aa680dcb5d1f872ec95b208cf6825dab14b86f1b721fbfebe1116ac4dd3405fadc33b5b5deac7eb6b1063a3b10c85de59bbd496664034034f88adddf' ;; \
-      arm64) roots_arch='aarch64'; roots_sha512='fa84500586028c625968e7de9c9a3533016ae8295c50af4bc28e26464d0161fda31bf4fd6f13e23c2072d9107a5b6410ad7d378cb5c32004cab58602fab9f201' ;; \
+      amd64) roots_arch='x86_64';  roots_sha512='35912a78b4a512e5b5d890feadf7f3dc12b18d91f5ad1786f34ab27b6511c8fb320f8f7a461dcd7238e1f502cf9c4c2881e684f59ad959688f25b23c5163b839' ;; \
+      arm64) roots_arch='aarch64'; roots_sha512='ff5dfdfd5709be2b84d33bf8801bd41b6fb311437d005cb21b97a4a1ef7865f92abd11bd06b8c11ed1b9cd730da9e5e5e27533a534e51a86708b2fa2782b0abf' ;; \
       *) echo "Unsupported TARGETARCH: ${TARGETARCH}" >&2; exit 1 ;; \
     esac; \
     curl -fsSL -o /tmp/bitcoin-roots.tar.gz "https://github.com/LuganoPlanB/bitcoin-roots/releases/download/v${ROOTS_VERSION}/bitcoin-roots-linux-${roots_arch}.tar.gz"; \
@@ -74,11 +74,11 @@ VOLUME /data
 # - bitcoind: normal monolithic daemon
 # - bitcoin-cli: RPC client used by the backend and manual container execs
 # - bitcoin + bitcoin-node: multiprocess IPC mode
-RUN mkdir -p /opt/bitcoind/v30.3-roots.1
-COPY --from=bitcoind_30_3_roots_1 /bin/bitcoind         /opt/bitcoind/v30.3-roots.1/bitcoind
-COPY --from=bitcoind_30_3_roots_1 /bin/bitcoin-cli      /opt/bitcoind/v30.3-roots.1/bitcoin-cli
-COPY --from=bitcoind_30_3_roots_1 /bin/bitcoin          /opt/bitcoind/v30.3-roots.1/bitcoin
-COPY --from=bitcoind_30_3_roots_1 /usr/bin/bitcoin-node /opt/bitcoind/v30.3-roots.1/bitcoin-node
+RUN mkdir -p /opt/bitcoind/v32.1-roots.2
+COPY --from=bitcoind_32_1_roots_2 /bin/bitcoind         /opt/bitcoind/v32.1-roots.2/bitcoind
+COPY --from=bitcoind_32_1_roots_2 /bin/bitcoin-cli      /opt/bitcoind/v32.1-roots.2/bitcoin-cli
+COPY --from=bitcoind_32_1_roots_2 /bin/bitcoin          /opt/bitcoind/v32.1-roots.2/bitcoin
+COPY --from=bitcoind_32_1_roots_2 /usr/bin/bitcoin-node /opt/bitcoind/v32.1-roots.2/bitcoin-node
 
 # Give 1000:1000 write permissions to /opt/bitcoind itself so we can flip
 # the current-version symlink while the container runs as 1000:1000.
@@ -86,7 +86,7 @@ RUN chown 1000:1000 /opt/bitcoind
 
 # Symbolic links for default Bitcoin Roots binaries
 # By default we point to the latest version of Bitcoin Roots
-RUN ln -sfn /opt/bitcoind/v30.3-roots.1 /opt/bitcoind/current
+RUN ln -sfn /opt/bitcoind/v32.1-roots.2 /opt/bitcoind/current
 RUN ln -sfn /opt/bitcoind/current/bitcoind     /usr/local/bin/bitcoind
 RUN ln -sfn /opt/bitcoind/current/bitcoin-cli  /usr/local/bin/bitcoin-cli
 RUN ln -sfn /opt/bitcoind/current/bitcoin      /usr/local/bin/bitcoin
@@ -145,11 +145,11 @@ COPY --from=app-builder /repo/libs/shared-types/dist ./libs/shared-types/dist
 # - bitcoind: normal monolithic daemon
 # - bitcoin-cli: RPC client used by the backend and manual container execs
 # - bitcoin + bitcoin-node: multiprocess IPC mode
-RUN mkdir -p /opt/bitcoind/v30.3-roots.1
-COPY --from=bitcoind_30_3_roots_1 /bin/bitcoind         /opt/bitcoind/v30.3-roots.1/bitcoind
-COPY --from=bitcoind_30_3_roots_1 /bin/bitcoin-cli      /opt/bitcoind/v30.3-roots.1/bitcoin-cli
-COPY --from=bitcoind_30_3_roots_1 /bin/bitcoin          /opt/bitcoind/v30.3-roots.1/bitcoin
-COPY --from=bitcoind_30_3_roots_1 /usr/bin/bitcoin-node /opt/bitcoind/v30.3-roots.1/bitcoin-node
+RUN mkdir -p /opt/bitcoind/v32.1-roots.2
+COPY --from=bitcoind_32_1_roots_2 /bin/bitcoind         /opt/bitcoind/v32.1-roots.2/bitcoind
+COPY --from=bitcoind_32_1_roots_2 /bin/bitcoin-cli      /opt/bitcoind/v32.1-roots.2/bitcoin-cli
+COPY --from=bitcoind_32_1_roots_2 /bin/bitcoin          /opt/bitcoind/v32.1-roots.2/bitcoin
+COPY --from=bitcoind_32_1_roots_2 /usr/bin/bitcoin-node /opt/bitcoind/v32.1-roots.2/bitcoin-node
 
 # Give 1000:1000 write permissions to /opt/bitcoind itself so we can flip
 # the current-version symlink while the container runs as 1000:1000.
@@ -157,7 +157,7 @@ RUN chown 1000:1000 /opt/bitcoind
 
 # Symbolic links for default Bitcoin Roots binaries
 # By default we point to the latest version of Bitcoin Roots
-RUN ln -sfn /opt/bitcoind/v30.3-roots.1 /opt/bitcoind/current
+RUN ln -sfn /opt/bitcoind/v32.1-roots.2 /opt/bitcoind/current
 RUN ln -sfn /opt/bitcoind/current/bitcoind     /usr/local/bin/bitcoind
 RUN ln -sfn /opt/bitcoind/current/bitcoin-cli  /usr/local/bin/bitcoin-cli
 RUN ln -sfn /opt/bitcoind/current/bitcoin      /usr/local/bin/bitcoin
