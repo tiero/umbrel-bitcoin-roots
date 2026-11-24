@@ -88,7 +88,7 @@ export function Layout() {
 					<motion.div
 						className='pointer-events-none sticky top-0 h-12 -mt-12 z-10'
 						style={{
-							background: 'linear-gradient(to bottom, #000 0%, transparent 100%)',
+							background: 'linear-gradient(to bottom, #171717 0%, transparent 100%)',
 							opacity: isAtTop ? 0 : fadeOpacity,
 						}}
 					/>
@@ -106,7 +106,7 @@ export function Layout() {
 				{/* Bottom fade overlay fixed to viewport bottom (Dock sits over it)*/}
 				<div
 					className='pointer-events-none fixed inset-x-0 bottom-0 h-12 z-20'
-					style={{background: 'linear-gradient(to top, #000 0%, transparent 100%)'}}
+					style={{background: 'linear-gradient(to top, #1A1616 0%, transparent 100%)'}}
 				/>
 			</div>
 		</>

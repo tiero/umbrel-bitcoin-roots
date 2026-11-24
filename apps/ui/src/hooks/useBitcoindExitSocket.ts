@@ -23,7 +23,7 @@ export function useBitcoindExitSocket() {
 		const ws = new WebSocket(`${location.origin.replace(/^http/, 'ws')}/api/ws/bitcoind/exit?token=${data?.token}`)
 
 		const showToast = () => {
-			toast.error('Bitcoin Core stopped unexpectedly', {
+			toast.error('Bitcoin Roots stopped unexpectedly', {
 				id: TOAST_ID,
 				duration: Infinity,
 				closeButton: true,

@@ -81,6 +81,13 @@ networks:
 	compose('config', '--quiet')
 	compose('up', '-d', 'app')
 	await until(() => assert.equal(rpc('getblockchaininfo').chain, 'regtest'))
+	const versionInfo = JSON.parse(
+		node(
+			`const r = await fetch('http://127.0.0.1:3000/api/bitcoind/version'); if (!r.ok) throw new Error('HTTP ' + r.status); console.log(JSON.stringify(await r.json()));`,
+		),
+	)
+	assert.equal(versionInfo.implementation, 'Bitcoin Roots')
+	assert.match(versionInfo.version, /^v\d+\.\d+(?:\.\d+)?-roots\.\d+$/)
 	const network = rpc('getnetworkinfo')
 	const onion = network.networks.find((entry) => entry.name === 'onion')
 	assert.equal(onion.proxy, '10.21.120.9:9050')

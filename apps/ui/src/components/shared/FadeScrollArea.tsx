@@ -1,11 +1,8 @@
-// This is a wrapper around Radix’s ScrollArea that shows subtle gradient
-// “hints” whenever there is more content to scroll to above or below the
-// viewport.
+// This is a wrapper around Radix’s ScrollArea that shows subtle alpha-mask fade
+// “hints” whenever there is more content to scroll to above or below the viewport.
+// Using CSS mask-image fades the scrolled content directly into whatever card or
+// page background sits behind it without any color seam.
 // It also has a thin scrollbar.
-
-// The overlays read CSS variables `--fade-top` and `--fade-bottom` so we can blend perfectly into any linear-gradient background.
-// They fall back to dark greys if they’re unset.
-// They can be set inline on the component
 
 import * as React from 'react'
 import {Root as ScrollRoot, Viewport as ScrollViewport, Corner as ScrollCorner} from '@radix-ui/react-scroll-area'
@@ -40,14 +37,22 @@ export default function FadeScrollArea({className, children, viewportRef: extern
 		const vp = viewportRef.current
 		const ct = contentRef.current
 		if (!vp || !ct) return
-		vp.addEventListener('scroll', update)
+		vp.addEventListener('scroll', update, {passive: true})
 		const ro = new ResizeObserver(update)
+		ro.observe(vp)
 		ro.observe(ct)
 		return () => {
 			vp.removeEventListener('scroll', update)
 			ro.disconnect()
 		}
 	}, [update])
+
+	const maskImage = React.useMemo(() => {
+		if (!showTop && !showBottom) return undefined
+		const topStop = showTop ? 'transparent 0px, black 56px' : 'black 0px'
+		const bottomStop = showBottom ? 'black calc(100% - 56px), transparent 100%' : 'black 100%'
+		return `linear-gradient(to bottom, ${topStop}, ${bottomStop})`
+	}, [showTop, showBottom])
 
 	return (
 		<ScrollRoot data-slot='scroll-area' className={cn('relative', className)} {...props}>
@@ -61,30 +66,13 @@ export default function FadeScrollArea({className, children, viewportRef: extern
 					}
 				}}
 				data-slot='scroll-area-viewport'
+				style={maskImage ? {maskImage, WebkitMaskImage: maskImage} : undefined}
 				className='size-full rounded-[inherit] transition-[color,box-shadow]
                    outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50
                    focus-visible:outline-1'
 			>
 				<div ref={contentRef}>{children}</div>
 			</ScrollViewport>
-
-			{/* gradient hints use CSS vars */}
-			{showTop && (
-				<div
-					className='pointer-events-none absolute inset-x-0 top-0 h-20'
-					style={{
-						background: 'linear-gradient(to bottom, var(--fade-top, #0f0f0f) 0%, transparent 100%)',
-					}}
-				/>
-			)}
-			{showBottom && (
-				<div
-					className='pointer-events-none absolute inset-x-0 bottom-0 h-20'
-					style={{
-						background: 'linear-gradient(to top, var(--fade-bottom, #080808) 0%, transparent 100%)',
-					}}
-				/>
-			)}
 
 			<SexyScrollBar orientation='vertical' />
 			<SexyScrollBar orientation='horizontal' />

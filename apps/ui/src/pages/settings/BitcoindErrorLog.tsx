@@ -99,15 +99,13 @@ export default function BitcoindErrorLog({
 					className='mb-6 rounded-lg border border-red-900 bg-red-950/80 p-4'
 				>
 					<p className='mb-2 text-sm text-red-200'>
-						Bitcoin Core stopped unexpectedly. Review the logs below for more information.
+						Bitcoin Roots stopped unexpectedly. Review the logs below for more information.
 					</p>
 
 					{/* scrollable log viewer with FadeScrollArea */}
 					<FadeScrollArea
 						ref={fadeScrollRef}
-						className='h-60 rounded bg-black/55 font-mono text-xs
-						           [--fade-top:rgba(0,0,0,0.4)] [--fade-bottom:rgba(0,0,0,0.4)]
-						           [&_[data-orientation="vertical"]]:mr-0'
+						className='h-60 rounded bg-black/55 font-mono text-xs [&_[data-orientation="vertical"]]:mr-0'
 					>
 						<div className='p-3 pr-1'>
 							{visibleLines.map((line, i) => (

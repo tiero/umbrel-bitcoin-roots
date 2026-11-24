@@ -11,7 +11,7 @@ const InputField = forwardRef<HTMLInputElement, Props>(({className, unit, ...res
 		<Input
 			ref={ref}
 			className={clsx(
-				'max-w-xs mb-4 border-none bg-[#272727] shadow-[inset_0_-1px_1px_0_rgba(255,255,255,0.2),_inset_0_1px_1px_0_rgba(0,0,0,0.36)]',
+				'max-w-xs mb-4 border-none bg-[#2B2525] shadow-[inset_0_-1px_1px_0_rgba(255,255,255,0.16),_inset_0_1px_1px_0_rgba(0,0,0,0.36)]',
 				'text-white placeholder:text-white/50 focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-white/10',
 				'[&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-inner-spin-button]:m-0 [&::-webkit-outer-spin-button]:m-0',
 				'[&[type=number]]:[-moz-appearance:textfield]',

@@ -502,9 +502,9 @@ export const settingsMetadata = {
 		label: 'IPC Mining Interface',
 		bitcoinLabel: 'ipcbind',
 		description:
-			'Allow apps on your Umbrel to connect to Bitcoin Core over its IPC mining interface. This is required for Stratum V2 apps to request block templates and submit mined blocks from your node.',
+			'Allow apps on your Umbrel to connect to Bitcoin Roots over its IPC mining interface. This is required for Stratum V2 apps to request block templates and submit mined blocks from your node.',
 		subDescription:
-			'Requires Bitcoin Roots v30.3-roots.1 or newer. This uses the multiprocess mode and experimental IPC interface inherited from Bitcoin Core. Leave this disabled unless an app you use requires it.',
+			'Requires Bitcoin Roots v30.3-roots.1 or newer. This uses multiprocess mode and the experimental IPC interface. Leave this disabled unless an app you use requires it.',
 		default: false,
 	},
 

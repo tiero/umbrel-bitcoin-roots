@@ -7,7 +7,7 @@ export default function IncompatibleSettingsAlert() {
 			<TriangleAlert className='h-4 w-4' />
 			<AlertTitle className='text-[#FF6B70]'>Incompatible Settings</AlertTitle>
 			<AlertDescription className='text-[#FF6B70]'>
-				Some settings are incompatible with the selected version of Bitcoin Core. Please review these settings in the
+				Some settings are incompatible with the selected version of Bitcoin Roots. Please review these settings in the
 				tabs marked with a red dot.
 			</AlertDescription>
 		</Alert>

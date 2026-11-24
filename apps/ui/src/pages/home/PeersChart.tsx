@@ -6,9 +6,9 @@ import {ChartContainer, type ChartConfig} from '@/components/ui/chart'
 import {usePeerCount} from '@/hooks/usePeers'
 
 const chartConfig = {
-	clearnet: {label: 'Clearnet', color: 'hsl(29 100% 51%)'},
-	tor: {label: 'Tor', color: 'hsl(29 100% 30%)'},
-	i2p: {label: 'I2P', color: 'hsl(29 100% 15%)'},
+	clearnet: {label: 'Clearnet', color: '#F7931A'},
+	tor: {label: 'Tor', color: '#E15364'},
+	i2p: {label: 'I2P', color: '#7A4848'},
 } satisfies ChartConfig
 
 // Active slice when hovering over the chart

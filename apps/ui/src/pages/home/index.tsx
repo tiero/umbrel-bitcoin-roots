@@ -99,8 +99,8 @@ export default function HomePage() {
 				<GradientBorderTopBottom depth='7%' />
 				<CardContent className='flex flex-col md:flex-row px-4 items-center'>
 					{/* Peers Globe + statuses */}
-					<div className='relative w-full flex-none md:flex-1 h-64 md:h-[375px] rounded-2xl bg-neutral-900/20 border-white/10 border-[0.5px] overflow-hidden'>
-						<div className='absolute top-[-50%] left-[-40%] w-[500%] h-[500%] rounded-full bg-black pointer-events-none' />
+					<div className='relative w-full flex-none md:flex-1 h-64 md:h-[375px] rounded-2xl bg-[#292424]/40 border-white/10 border-[0.5px] overflow-hidden'>
+						<div className='absolute top-[-50%] left-[-40%] w-[500%] h-[500%] rounded-full bg-[#191616] pointer-events-none' />
 						<GradientBorderFromCorners />
 
 						<div className='relative md:top-[-20%] md:right-[-5%] sm:top-[-40%] sm:right-[20%] top-[-25%] right-[40%]'>
@@ -124,11 +124,11 @@ export default function HomePage() {
 
 									{running ? (
 										<>
-											<span className='text-[#0BC39E] text-[14px] font-[500] ml-1'>Running</span>
+											<span className='text-[#3DD68C] text-[14px] font-[500] ml-1'>Running</span>
 											{uptime && <span className='text-white/60 text-[14px] font-[400]'>for {uptime}</span>}
 										</>
 									) : (
-										<span className='text-[#EF4444] text-[14px] font-[500] ml-1'>Not running</span>
+										<span className='text-[#E15364] text-[14px] font-[500] ml-1'>Not running</span>
 									)}
 								</motion.h3>
 							)}

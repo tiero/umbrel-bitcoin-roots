@@ -29,6 +29,7 @@ import {
 
 import {GradientBorderFromTop} from '@/components/shared/GradientBorders'
 import FadeScrollArea from '@/components/shared/FadeScrollArea'
+import HorizontalFadeScroll from '@/components/shared/HorizontalFadeScroll'
 import {Form} from './Form'
 import Toggle from './Toggle'
 import InputField from './InputField'
@@ -112,7 +113,7 @@ function SettingsTabTrigger({
 	return (
 		<TabsTrigger
 			value={value}
-			className='relative text-[12px] bg-transparent border-none data-[state=active]:text-white data-[state=active]:bg-transparent data-[state=inactive]:text-white/60 focus-visible:outline-none focus:outline-none focus:ring-0 rounded-none hover:text-white/80 transition-none pb-3 after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[1.5px] after:bg-transparent data-[state=active]:after:bg-white'
+			className='relative text-[12px] bg-transparent border-none data-[state=active]:text-[#FF9F2D] data-[state=active]:bg-transparent data-[state=inactive]:text-white/60 focus-visible:outline-none focus:outline-none focus:ring-0 rounded-none hover:text-white/80 transition-none pb-3 after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[1.5px] after:bg-transparent data-[state=active]:after:bg-[#F7931A]'
 		>
 			{children}
 
@@ -365,12 +366,12 @@ function FieldRenderer({
 								disabled={disabled}
 							>
 								<SelectTrigger
-									className={`rounded bg-[#272727] shadow-[inset_0_-1px_1px_0_rgba(255,255,255,0.2),_inset_0_1px_1px_0_rgba(0,0,0,0.36)] p-3 text-white focus:ring-0 ring-offset-0 border-none max-sm:text-[12px]`}
+									className={`rounded bg-[#2B2525] shadow-[inset_0_-1px_1px_0_rgba(255,255,255,0.16),_inset_0_1px_1px_0_rgba(0,0,0,0.36)] p-3 text-white focus:ring-0 ring-offset-0 border-none max-sm:text-[12px]`}
 								>
 									<SelectValue placeholder='Select…' />
 								</SelectTrigger>
 
-								<SelectContent className='bg-[#272727] shadow-[inset_0_-1px_1px_0_rgba(255,255,255,0.2),_inset_0_1px_1px_0_rgba(0,0,0,0.36)] text-white border-none'>
+								<SelectContent className='bg-[#262121] border border-white/12 shadow-xl text-white'>
 									{option.options.map((opt) => {
 										// Keep every option registered with Radix while settings load. Dynamically adding a saved
 										// value after form.reset() makes Radix briefly emit an empty value. Withdrawn versions are
@@ -483,7 +484,7 @@ export default function SettingsCard() {
 	const onUpdateSettings = (data: SettingsSchema) => {
 		// If the mutation takes longer than 1 second, we show a loading toast
 		updateTimer.current = setTimeout(() => {
-			updateToastId.current = toast.loading('Hang tight, Bitcoin Core is restarting...', {duration: Infinity})
+			updateToastId.current = toast.loading('Hang tight, Bitcoin Roots is restarting...', {duration: Infinity})
 		}, 1000)
 
 		updateSettings.mutate(data, {
@@ -520,7 +521,7 @@ export default function SettingsCard() {
 	const onRestoreDefaults = () => {
 		// If the mutation takes longer than 1 second, we show a loading toast
 		restoreTimer.current = setTimeout(() => {
-			restoreToastId.current = toast.loading('Hang tight, Bitcoin Core is restarting...', {duration: Infinity})
+			restoreToastId.current = toast.loading('Hang tight, Bitcoin Roots is restarting...', {duration: Infinity})
 		}, 1000)
 
 		restoreDefaults.mutate(undefined, {
@@ -573,11 +574,11 @@ export default function SettingsCard() {
 
 	// This array drives both the tab triggers (navigation) and tab content rendering
 	const tabs = [
-		{value: 'peers', label: 'Peer Settings'},
+		{value: 'peers', label: 'Peers'},
 		{value: 'optimization', label: 'Optimization'},
 		{value: 'rpc-rest', label: 'Interfaces'},
-		{value: 'network', label: 'Network Selection'},
-		{value: 'version', label: 'Bitcoin Core Version'},
+		{value: 'network', label: 'Network'},
+		{value: 'version', label: 'Version'},
 		{value: 'advanced', label: 'Advanced'},
 	] as const
 
@@ -597,7 +598,7 @@ export default function SettingsCard() {
 										value={query}
 										onChange={(e) => setQuery(e.target.value)}
 										placeholder='Search'
-										className='pl-10 border-none bg-[#272727] shadow-[inset_0_-1px_1px_0_rgba(255,255,255,0.2),_inset_0_1px_1px_0_rgba(0,0,0,0.36)] text-white placeholder:text-white/50 focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-white/10'
+										className='pl-10 border-none bg-[#2B2525] shadow-[inset_0_-1px_1px_0_rgba(255,255,255,0.16),_inset_0_1px_1px_0_rgba(0,0,0,0.36)] text-white placeholder:text-white/50 focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-white/10'
 									/>
 								</div>
 							</div>
@@ -618,8 +619,8 @@ export default function SettingsCard() {
 										isSearching && 'opacity-0 pointer-events-none select-none',
 									)}
 								>
-									<FadeScrollArea className='w-full'>
-										<TabsList className='relative flex bg-transparent rounded-none h-auto p-0 gap-1 z-10 w-max'>
+									<HorizontalFadeScroll className='w-full'>
+										<TabsList className='relative flex bg-transparent rounded-none h-auto p-0 gap-2 z-10 w-max'>
 											{/* Render tab triggers dynamically from the tabs configuration */}
 											{tabs.map((tab) => (
 												<SettingsTabTrigger
@@ -634,7 +635,7 @@ export default function SettingsCard() {
 												</SettingsTabTrigger>
 											))}
 										</TabsList>
-									</FadeScrollArea>
+									</HorizontalFadeScroll>
 								</div>
 
 								{/* TabsContent for each category */}
@@ -642,7 +643,7 @@ export default function SettingsCard() {
 								<FadeScrollArea
 									// We use a key to reset scroll position when switching tabs or search
 									key={isSearching ? 'search' : currentTab}
-									className='h-[calc(100dvh-425px)] md:h-[calc(100dvh-390px)] [--fade-top:hsla(0,0%,6%,1)][--fade-bottom:hsla(0,0%,3%,1)]'
+									className='h-[calc(100dvh-425px)] md:h-[calc(100dvh-390px)]'
 									viewportRef={(el) => {
 										settingsViewportRef.current = el
 									}}
@@ -714,6 +715,8 @@ export default function SettingsCard() {
 								<AlertDialogTrigger asChild>
 									<Button
 										type='button'
+										variant='outline'
+										className='cursor-pointer bg-[#2B2525] border-white/15 text-white/90 hover:bg-[#383030] hover:text-white'
 										// We don't allow restoring defaults if the form is submitting, if the updated settings are pending, or if the restore defaults mutation is pending
 										disabled={isSubmitting || updateSettings.isPending || restoreDefaults.isPending}
 									>
@@ -738,9 +741,9 @@ export default function SettingsCard() {
 													return (
 														<div className='bg-orange-500/10 border border-orange-500/20 rounded-md p-3'>
 															<p className='text-orange-200 text-xs'>
-																You have manually chosen to stay on Bitcoin Core Version {currentVersion}. Restoring
-																defaults will use the default settings for Bitcoin Core {currentVersion}, not the latest
-																version.
+																You have manually chosen to stay on Bitcoin Roots Version {currentVersion}. Restoring
+																defaults will use the default settings for Bitcoin Roots {currentVersion}, not the
+																latest version.
 															</p>
 														</div>
 													)
@@ -751,8 +754,13 @@ export default function SettingsCard() {
 									</AlertDialogHeader>
 
 									<AlertDialogFooter>
-										<AlertDialogCancel className='bg-white/90 hover:bg-white'>Cancel</AlertDialogCancel>
-										<AlertDialogAction onClick={onRestoreDefaults} className='hover:bg-white/10'>
+										<AlertDialogCancel className='cursor-pointer bg-[#2B2525] border-white/15 text-white/90 hover:bg-[#383030] hover:text-white'>
+											Cancel
+										</AlertDialogCancel>
+										<AlertDialogAction
+											onClick={onRestoreDefaults}
+											className='cursor-pointer bg-[#F7931A] hover:bg-[#FF9F2D] text-[#171717] font-semibold'
+										>
 											Yes
 										</AlertDialogAction>
 									</AlertDialogFooter>
@@ -762,6 +770,7 @@ export default function SettingsCard() {
 							{/* SAVE BUTTON */}
 							<Button
 								type='button'
+								className='cursor-pointer bg-[#F7931A] hover:bg-[#FF9F2D] text-[#171717] font-semibold'
 								// We don't allow saving if the form is not dirty (meaning it is unchanged), is invalid, if we're still loading initial settings, if the form is submitting, or if the updated settings are pending
 								disabled={!isDirty || !isValid || isLoading || isSubmitting || updateSettings.isPending}
 								onClick={() => setIsSaveOpen(true)}

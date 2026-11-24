@@ -94,6 +94,22 @@ type BitcoindManagerOptions = {
 	extraArgs?: string[]
 }
 
+export function parseBinaryVersionLine(firstLine: string): {implementation: string; version: string} {
+	const trimmed = firstLine.trim()
+	if (!trimmed) return {implementation: 'unknown', version: 'unknown'}
+	const versionIdx = trimmed.search(/\bversion\b/i)
+	let implementation = (versionIdx >= 0 ? trimmed.slice(0, versionIdx) : trimmed).trim()
+	const lower = implementation.toLowerCase()
+	if (lower.endsWith(' rpc client')) {
+		implementation = implementation.slice(0, -' rpc client'.length).trim()
+	} else if (lower.endsWith(' daemon')) {
+		implementation = implementation.slice(0, -' daemon'.length).trim()
+	}
+	implementation = implementation || 'unknown'
+	const version = (trimmed.match(/v\d+\.\d+(?:\.\d+)?(?:-[\w.-]+)?/) ?? ['unknown'])[0]
+	return {implementation, version}
+}
+
 export class BitcoindManager {
 	private child: ChildProcessWithoutNullStreams | null = null
 	private readonly bin: string
@@ -162,9 +178,7 @@ export class BitcoindManager {
 	private getBinaryVersionInfo(binary = this.bin) {
 		try {
 			const firstLine = execFileSync(binary, ['--version']).toString().split('\n')[0]
-			const implementation = firstLine.replace(/(?:daemon|RPC client)?\s*version.*$/i, '').trim()
-			const version = (firstLine.match(/v\d+\.\d+\.\d+/) ?? ['unknown'])[0]
-			return {implementation, version}
+			return parseBinaryVersionLine(firstLine)
 		} catch {
 			return {implementation: 'unknown', version: 'unknown'}
 		}
@@ -201,7 +215,7 @@ export class BitcoindManager {
 			// Reflect the desired version in versionInfo so the UI shows intent, not the current symlink
 			this.versionInfo = {...this.versionInfo, version}
 			const requiredBinaries = ipcEnabled ? 'bitcoind, bitcoin, bitcoin-node' : 'bitcoind'
-			const msg = `Bitcoin Core version "${version}" is not installed (missing required executable(s): ${requiredBinaries} in ${BITCOIN_CORE_VERSIONS_DIR}/${version}).`
+			const msg = `Bitcoin Roots version "${version}" is not installed (missing required executable(s): ${requiredBinaries} in ${BITCOIN_CORE_VERSIONS_DIR}/${version}).`
 			this.lastError = new Error(msg)
 			this.exitInfo = {
 				code: null,
@@ -252,7 +266,7 @@ export class BitcoindManager {
 				code,
 				sig,
 				logTail: [...this.logRing],
-				message: `Bitcoin Core stopped (code ${code ?? 'null'})`,
+				message: `Bitcoin Roots stopped (code ${code ?? 'null'})`,
 			}
 
 			this.events.emit('exit', this.exitInfo)

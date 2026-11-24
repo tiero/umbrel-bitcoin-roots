@@ -25,7 +25,7 @@ const VersionPinningStatus = ({formVersion}: {formVersion: string}) => {
 		return (
 			<span className='bg-green-500/10 border border-green-500/20 rounded-md p-3 block'>
 				<span className='text-green-200 text-xs'>
-					You have chosen to automatically run the latest Bitcoin Core version available in the Bitcoin Node app.
+					You have chosen to automatically run the latest Bitcoin Roots version available in the Bitcoin Roots app.
 				</span>
 			</span>
 		)
@@ -34,9 +34,9 @@ const VersionPinningStatus = ({formVersion}: {formVersion: string}) => {
 	return (
 		<span className='bg-orange-500/10 border border-orange-500/20 rounded-md p-3 block'>
 			<span className='text-orange-200 text-xs'>
-				You have chosen to stay on Bitcoin Core {formVersion} until you manually change it again in Settings. Your
-				Bitcoin Node app will continue to receive updates from the Umbrel App Store, but it won't be automatically
-				upgraded to the latest Bitcoin Core version available in the Bitcoin Node app.
+				You have chosen to stay on Bitcoin Roots {formVersion} until you manually change it again in Settings. Your
+				Bitcoin Roots app will continue to receive updates from the Umbrel App Store, but it won't be automatically
+				upgraded to the latest Bitcoin Roots version available in the Bitcoin Roots app.
 			</span>
 		</span>
 	)
@@ -72,13 +72,15 @@ export default function SaveSettingsDialog({
 					</AlertDialogDescription>
 				</AlertDialogHeader>
 				<AlertDialogFooter>
-					<AlertDialogCancel className='bg-white/90 hover:bg-white'>Cancel</AlertDialogCancel>
+					<AlertDialogCancel className='cursor-pointer bg-[#2B2525] border-white/15 text-white/90 hover:bg-[#383030] hover:text-white'>
+						Cancel
+					</AlertDialogCancel>
 					<AlertDialogAction
 						onClick={() => {
 							onOpenChange(false)
 							onSave()
 						}}
-						className='hover:bg-white/10'
+						className='cursor-pointer bg-[#F7931A] hover:bg-[#FF9F2D] text-[#171717] font-semibold'
 					>
 						Yes
 					</AlertDialogAction>
