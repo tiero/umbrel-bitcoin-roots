@@ -72,13 +72,15 @@ export default function SaveSettingsDialog({
 					</AlertDialogDescription>
 				</AlertDialogHeader>
 				<AlertDialogFooter>
-					<AlertDialogCancel className='bg-white/90 hover:bg-white'>Cancel</AlertDialogCancel>
+					<AlertDialogCancel className='cursor-pointer bg-[#2B2525] border-white/15 text-white/90 hover:bg-[#383030] hover:text-white'>
+						Cancel
+					</AlertDialogCancel>
 					<AlertDialogAction
 						onClick={() => {
 							onOpenChange(false)
 							onSave()
 						}}
-						className='hover:bg-white/10'
+						className='cursor-pointer bg-[#F7931A] hover:bg-[#FF9F2D] text-[#171717] font-semibold'
 					>
 						Yes
 					</AlertDialogAction>

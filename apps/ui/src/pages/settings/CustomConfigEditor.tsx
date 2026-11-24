@@ -43,7 +43,7 @@ export default function CustomConfigEditor() {
 
 			<Button
 				type='button'
-				className='mt-3'
+				className='mt-3 cursor-pointer bg-[#F7931A] hover:bg-[#FF9F2D] text-[#171717] font-semibold'
 				disabled={!canSave}
 				onClick={() =>
 					save.mutate(text, {

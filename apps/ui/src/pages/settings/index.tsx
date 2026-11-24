@@ -366,12 +366,12 @@ function FieldRenderer({
 								disabled={disabled}
 							>
 								<SelectTrigger
-									className={`rounded bg-[#272727] shadow-[inset_0_-1px_1px_0_rgba(255,255,255,0.2),_inset_0_1px_1px_0_rgba(0,0,0,0.36)] p-3 text-white focus:ring-0 ring-offset-0 border-none max-sm:text-[12px]`}
+									className={`rounded bg-[#2B2525] shadow-[inset_0_-1px_1px_0_rgba(255,255,255,0.16),_inset_0_1px_1px_0_rgba(0,0,0,0.36)] p-3 text-white focus:ring-0 ring-offset-0 border-none max-sm:text-[12px]`}
 								>
 									<SelectValue placeholder='Select…' />
 								</SelectTrigger>
 
-								<SelectContent className='bg-[#272727] shadow-[inset_0_-1px_1px_0_rgba(255,255,255,0.2),_inset_0_1px_1px_0_rgba(0,0,0,0.36)] text-white border-none'>
+								<SelectContent className='bg-[#262121] border border-white/12 shadow-xl text-white'>
 									{option.options.map((opt) => {
 										// Keep every option registered with Radix while settings load. Dynamically adding a saved
 										// value after form.reset() makes Radix briefly emit an empty value. Withdrawn versions are
@@ -598,7 +598,7 @@ export default function SettingsCard() {
 										value={query}
 										onChange={(e) => setQuery(e.target.value)}
 										placeholder='Search'
-										className='pl-10 border-none bg-[#272727] shadow-[inset_0_-1px_1px_0_rgba(255,255,255,0.2),_inset_0_1px_1px_0_rgba(0,0,0,0.36)] text-white placeholder:text-white/50 focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-white/10'
+										className='pl-10 border-none bg-[#2B2525] shadow-[inset_0_-1px_1px_0_rgba(255,255,255,0.16),_inset_0_1px_1px_0_rgba(0,0,0,0.36)] text-white placeholder:text-white/50 focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-white/10'
 									/>
 								</div>
 							</div>
@@ -715,6 +715,8 @@ export default function SettingsCard() {
 								<AlertDialogTrigger asChild>
 									<Button
 										type='button'
+										variant='outline'
+										className='cursor-pointer bg-[#2B2525] border-white/15 text-white/90 hover:bg-[#383030] hover:text-white'
 										// We don't allow restoring defaults if the form is submitting, if the updated settings are pending, or if the restore defaults mutation is pending
 										disabled={isSubmitting || updateSettings.isPending || restoreDefaults.isPending}
 									>
@@ -752,8 +754,13 @@ export default function SettingsCard() {
 									</AlertDialogHeader>
 
 									<AlertDialogFooter>
-										<AlertDialogCancel className='bg-white/90 hover:bg-white'>Cancel</AlertDialogCancel>
-										<AlertDialogAction onClick={onRestoreDefaults} className='hover:bg-white/10'>
+										<AlertDialogCancel className='cursor-pointer bg-[#2B2525] border-white/15 text-white/90 hover:bg-[#383030] hover:text-white'>
+											Cancel
+										</AlertDialogCancel>
+										<AlertDialogAction
+											onClick={onRestoreDefaults}
+											className='cursor-pointer bg-[#F7931A] hover:bg-[#FF9F2D] text-[#171717] font-semibold'
+										>
 											Yes
 										</AlertDialogAction>
 									</AlertDialogFooter>
@@ -763,6 +770,7 @@ export default function SettingsCard() {
 							{/* SAVE BUTTON */}
 							<Button
 								type='button'
+								className='cursor-pointer bg-[#F7931A] hover:bg-[#FF9F2D] text-[#171717] font-semibold'
 								// We don't allow saving if the form is not dirty (meaning it is unchanged), is invalid, if we're still loading initial settings, if the form is submitting, or if the updated settings are pending
 								disabled={!isDirty || !isValid || isLoading || isSubmitting || updateSettings.isPending}
 								onClick={() => setIsSaveOpen(true)}

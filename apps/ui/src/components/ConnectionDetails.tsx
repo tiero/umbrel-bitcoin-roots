@@ -74,19 +74,19 @@ export default function ConnectionDetails() {
 						<TabsList className='relative flex bg-transparent rounded-none h-auto p-0 gap-1 z-10 w-max'>
 							<TabsTrigger
 								value='electrum'
-								className='relative text-[12px] bg-transparent border-none data-[state=active]:text-white data-[state=active]:bg-transparent data-[state=inactive]:text-white/60 focus-visible:outline-none focus:outline-none focus:ring-0 rounded-none hover:text-white/80 transition-none pb-3 after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[1.5px] after:bg-transparent data-[state=active]:after:bg-white'
+								className='relative text-[12px] bg-transparent border-none data-[state=active]:text-[#FF9F2D] data-[state=active]:bg-transparent data-[state=inactive]:text-white/60 focus-visible:outline-none focus:outline-none focus:ring-0 rounded-none hover:text-white/80 transition-none pb-3 after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[1.5px] after:bg-transparent data-[state=active]:after:bg-[#F7931A]'
 							>
 								Electrum
 							</TabsTrigger>
 							<TabsTrigger
 								value='rpc'
-								className='relative text-[12px] bg-transparent border-none data-[state=active]:text-white data-[state=active]:bg-transparent data-[state=inactive]:text-white/60 focus-visible:outline-none focus:outline-none focus:ring-0 rounded-none hover:text-white/80 transition-none pb-3 after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[1.5px] after:bg-transparent data-[state=active]:after:bg-white'
+								className='relative text-[12px] bg-transparent border-none data-[state=active]:text-[#FF9F2D] data-[state=active]:bg-transparent data-[state=inactive]:text-white/60 focus-visible:outline-none focus:outline-none focus:ring-0 rounded-none hover:text-white/80 transition-none pb-3 after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[1.5px] after:bg-transparent data-[state=active]:after:bg-[#F7931A]'
 							>
 								RPC Details
 							</TabsTrigger>
 							<TabsTrigger
 								value='p2p'
-								className='relative text-[12px] bg-transparent border-none data-[state=active]:text-white data-[state=active]:bg-transparent data-[state=inactive]:text-white/60 focus-visible:outline-none focus:outline-none focus:ring-0 rounded-none hover:text-white/80 transition-none pb-3 after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[1.5px] after:bg-transparent data-[state=active]:after:bg-white'
+								className='relative text-[12px] bg-transparent border-none data-[state=active]:text-[#FF9F2D] data-[state=active]:bg-transparent data-[state=inactive]:text-white/60 focus-visible:outline-none focus:outline-none focus:ring-0 rounded-none hover:text-white/80 transition-none pb-3 after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[1.5px] after:bg-transparent data-[state=active]:after:bg-[#F7931A]'
 							>
 								P2P Details
 							</TabsTrigger>
@@ -138,7 +138,7 @@ export default function ConnectionDetails() {
 											<LocalRPCAlert net={net} />
 										</div>
 									)}
-									<div className='divide-y divide-white/6 overflow-hidden rounded-xl w-full h-fit bg-gradient-to-b from-[#1C1C1C] to-[#0D0D0D]'>
+									<div className='divide-y divide-white/6 overflow-hidden rounded-xl w-full h-fit bg-gradient-to-b from-[#241F1F] to-[#1A1616]'>
 										<Field label='Username' value={conn.username} />
 										<Field label='Password' value={conn.password} />
 										<Field label='Host' value={conn.host} />
@@ -156,7 +156,7 @@ export default function ConnectionDetails() {
 							<TabsContent value='p2p' className='mt-0 min-h-[360px]'>
 								<div className='flex flex-col sm:flex-row gap-4'>
 									<ConnectionTypeAndQrCard net={net} setNet={setNet} conn={conn} />
-									<div className='divide-y divide-white/6 overflow-hidden rounded-xl w-full h-fit bg-gradient-to-b from-[#1C1C1C] to-[#0D0D0D]'>
+									<div className='divide-y divide-white/6 overflow-hidden rounded-xl w-full h-fit bg-gradient-to-b from-[#241F1F] to-[#1A1616]'>
 										<Field label='Host' value={conn.host} />
 										<Field label='Port' value={conn.port?.toString()} />
 									</div>
@@ -247,7 +247,7 @@ function QR({value}: {value?: string}) {
 			</div>
 
 			{/* Umbrel logo overlay */}
-			<div className='absolute inset-1/2 -translate-x-1/2 -translate-y-1/2 w-14 h-14 p-2 shadow-md pointer-events-none select-none bg-[#1C1C1C]'>
+			<div className='absolute inset-1/2 -translate-x-1/2 -translate-y-1/2 w-14 h-14 p-2 shadow-md pointer-events-none select-none bg-[#211C1C]'>
 				<div className='w-full h-full flex items-center justify-center bg-white/10 rounded-md p-1.5'>
 					<UmbrelLogo className='w-full h-full text-white' />
 				</div>
@@ -277,10 +277,10 @@ function ConnectionTypeAndQrCard({
 	conn: ConnectionDetailsType['rpc']['tor']
 }) {
 	return (
-		<div className='bg-gradient-to-b from-[#1C1C1C] to-[#0D0D0D] p-5 rounded-xl'>
+		<div className='bg-gradient-to-b from-[#241F1F] to-[#1A1616] p-5 rounded-xl'>
 			<h3 className='text-white/60 text-[12px] font-[400] mb-2 text-center'>Connection Type</h3>
 			<Tabs value={net} onValueChange={(v: string) => setNet(v as 'tor' | 'local')} className='w-[200px] mx-auto mb-3'>
-				<TabsList className='relative flex w-full rounded-md bg-[#121212] backdrop-blur-xl p-1 ring-white/10'>
+				<TabsList className='relative flex w-full rounded-md bg-[#181414] backdrop-blur-xl p-1 ring-white/10'>
 					<GradientBorderFromTop />
 
 					<TabsTrigger
@@ -290,7 +290,7 @@ function ConnectionTypeAndQrCard({
 						{net === 'local' && (
 							<motion.span
 								layoutId='connection-pill'
-								className='absolute inset-0 -z-10 rounded-sm bg-[#252525]'
+								className='absolute inset-0 -z-10 rounded-sm bg-[#2E2727]'
 								transition={{type: 'tween', ease: 'easeInOut', duration: 0.2}}
 							>
 								<GradientBorderFromTop />
@@ -306,7 +306,7 @@ function ConnectionTypeAndQrCard({
 						{net === 'tor' && (
 							<motion.span
 								layoutId='connection-pill'
-								className='absolute inset-0 -z-10 rounded-sm bg-[#252525]'
+								className='absolute inset-0 -z-10 rounded-sm bg-[#2E2727]'
 								transition={{type: 'tween', ease: 'easeInOut', duration: 0.2}}
 							>
 								<GradientBorderFromTop />
