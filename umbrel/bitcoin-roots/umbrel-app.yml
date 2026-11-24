@@ -16,8 +16,10 @@ description: >-
 
   Declares Umbrel Bitcoin node compatibility (implements: bitcoin) so apps such as
   Core Lightning, LND, Electrs, and Bassin can select Bitcoin Roots as their Bitcoin
-  node provider. Uses dedicated host ports (P2P 10333, RPC 10332, Web UI 2111) so it
-  can run alongside Bitcoin Core or Bitcoin Knots for side-by-side chain migration.
+  node provider. Uses standard Bitcoin ports (P2P 8333, RPC 8332) for full
+  DNS-seed clearnet peer discovery with a dedicated Web UI port (2111). Stop
+  Bitcoin Core before installing or starting Bitcoin Roots (Bitcoin Knots uses
+  9333/9332 and does not collide).
 developer: Plan-B Foundation
 website: https://plan-b.foundation/bitcoin-roots
 dependencies: []
@@ -29,8 +31,8 @@ path: ''
 defaultPassword: ''
 releaseNotes: >-
   Adds Umbrel Bitcoin provider compatibility (implements: bitcoin and canonical
-  APP_BITCOIN_* exports), moves P2P/RPC/UI ports to 10333/10332/2111 for side-by-side
-  coexistence with Bitcoin Core and Bitcoin Knots, and fixes I2P data permissions.
+  APP_BITCOIN_* exports), keeps standard Bitcoin P2P/RPC ports (8333/8332) with
+  dedicated Web UI port 2111, and fixes I2P data permissions.
 widgets:
   - id: 'stats'
     type: 'four-stats'

@@ -4,7 +4,7 @@ umask 077
 
 : "${TOR_CONTROL_PASSWORD:?Tor control password is required}"
 : "${BITCOIND_IP:?Bitcoin address is required}"
-RPC_PORT="${RPC_PORT:-10332}"
+RPC_PORT="${RPC_PORT:-8332}"
 [[ "$TOR_CONTROL_PASSWORD" =~ ^[a-zA-Z0-9]+$ ]] || exit 1
 [[ "$BITCOIND_IP" =~ ^[0-9.]+$ ]] || exit 1
 [[ "$RPC_PORT" =~ ^[0-9]+$ ]] || exit 1
