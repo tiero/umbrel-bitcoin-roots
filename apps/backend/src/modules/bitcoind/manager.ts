@@ -215,7 +215,7 @@ export class BitcoindManager {
 			// Reflect the desired version in versionInfo so the UI shows intent, not the current symlink
 			this.versionInfo = {...this.versionInfo, version}
 			const requiredBinaries = ipcEnabled ? 'bitcoind, bitcoin, bitcoin-node' : 'bitcoind'
-			const msg = `Bitcoin Core version "${version}" is not installed (missing required executable(s): ${requiredBinaries} in ${BITCOIN_CORE_VERSIONS_DIR}/${version}).`
+			const msg = `Bitcoin Roots version "${version}" is not installed (missing required executable(s): ${requiredBinaries} in ${BITCOIN_CORE_VERSIONS_DIR}/${version}).`
 			this.lastError = new Error(msg)
 			this.exitInfo = {
 				code: null,
@@ -266,7 +266,7 @@ export class BitcoindManager {
 				code,
 				sig,
 				logTail: [...this.logRing],
-				message: `Bitcoin Core stopped (code ${code ?? 'null'})`,
+				message: `Bitcoin Roots stopped (code ${code ?? 'null'})`,
 			}
 
 			this.events.emit('exit', this.exitInfo)

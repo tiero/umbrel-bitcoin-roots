@@ -738,9 +738,9 @@ export default function SettingsCard() {
 													return (
 														<div className='bg-orange-500/10 border border-orange-500/20 rounded-md p-3'>
 															<p className='text-orange-200 text-xs'>
-																You have manually chosen to stay on Bitcoin Core Version {currentVersion}. Restoring
-																defaults will use the default settings for Bitcoin Core {currentVersion}, not the latest
-																version.
+																You have manually chosen to stay on Bitcoin Roots Version {currentVersion}. Restoring
+																defaults will use the default settings for Bitcoin Roots {currentVersion}, not the
+																latest version.
 															</p>
 														</div>
 													)
