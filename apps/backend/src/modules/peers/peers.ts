@@ -4,8 +4,8 @@ import {ipToLatLng} from './ip-to-location.js'
 
 import type {PeerInfo, PeerCount, PeerLocation, PeerLocationsResponse} from '#types'
 
-// Cached getpeerinfo response
-const getPeerInfoRPC = () => rpcClient.command<PeerInfo[]>('getpeerinfo')
+// Cached getpeerinfo response (5s TTL + in-flight deduplication)
+const getPeerInfoRPC = () => rpcClient.cachedCommand<PeerInfo[]>(5_000, 'getpeerinfo')
 
 // Raw bitcoind getpeerinfo response
 export async function peerInfo(): Promise<PeerInfo[]> {

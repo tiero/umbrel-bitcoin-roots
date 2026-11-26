@@ -1,17 +1,18 @@
 import {motion, AnimatePresence} from 'framer-motion'
 import {Info as InfoIcon} from 'lucide-react'
 import {formatUptimeMs} from '@/lib/formatUptime'
-import {useState, useEffect} from 'react'
+import {lazy, Suspense, useState, useEffect} from 'react'
 
 import {Card, CardContent} from '@/components/ui/card'
 import {GradientBorderTopBottom, GradientBorderFromCorners} from '@/components/shared/GradientBorders'
 import InfoDialog from '@/components/shared/InfoDialog'
 import HorizontalFadeScroll from '@/components/shared/HorizontalFadeScroll'
-import Globe from './Globe'
 import PeersChart from './PeersChart'
 import StatusDot from './StatusDot'
-import Blocks from './Blocks'
 import GlobeInfo from './GlobeInfo'
+
+const Globe = lazy(() => import('./Globe'))
+const Blocks = lazy(() => import('./Blocks'))
 
 import {useBitcoindStatus} from '@/hooks/useBitcoind'
 import {useSyncStatus} from '@/hooks/useSyncStatus'
@@ -104,7 +105,9 @@ export default function HomePage() {
 						<GradientBorderFromCorners />
 
 						<div className='relative md:top-[-20%] md:right-[-5%] sm:top-[-40%] sm:right-[20%] top-[-25%] right-[40%]'>
-							<Globe width={globeSize} height={globeSize} />
+							<Suspense fallback={null}>
+								<Globe width={globeSize} height={globeSize} />
+							</Suspense>
 						</div>
 
 						{/* Running status */}
@@ -189,7 +192,9 @@ export default function HomePage() {
 			<div className='w-full mt-4'>
 				<span className='text-white/50 text-[14px] font-[400] ml-4'>Latest Blocks</span>
 				<HorizontalFadeScroll>
-					<Blocks />
+					<Suspense fallback={<div className='w-[768px] h-[180px]' />}>
+						<Blocks />
+					</Suspense>
 				</HorizontalFadeScroll>
 			</div>
 		</>

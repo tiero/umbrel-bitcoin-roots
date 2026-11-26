@@ -1,19 +1,41 @@
 import {createHash} from 'node:crypto'
-import {closeSync, fstatSync, openSync, readSync} from 'node:fs'
+import {existsSync, fstatSync, openSync, readSync} from 'node:fs'
 import {createRequire} from 'node:module'
 import net from 'node:net'
 import path from 'node:path'
+import {fileURLToPath} from 'node:url'
 
 type LatLng = [number, number]
 
 const RECORD_SIZE_V4 = 24
 const RECORD_SIZE_V6 = 48
+const COMPACT_SIZE_V4 = 12
+const COMPACT_SIZE_V6 = 20
 const NO_LOCATION = 0xffffffff
 const MAX_CACHE_SIZE = 256
 
 const require = createRequire(import.meta.url)
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
-function resolveGeoDataDir(): string | null {
+type GeoTable = {
+	fd: number
+	totalRecords: number
+	compact: boolean
+}
+
+function resolveCompactDir(): string | null {
+	const candidates = [
+		process.env['GEOIP_DATA_DIR'],
+		path.resolve(__dirname, '../../geoip'),
+		path.resolve(process.cwd(), 'dist/geoip'),
+	]
+	for (const dir of candidates) {
+		if (dir && existsSync(path.join(dir, 'geoip-v4.bin'))) return dir
+	}
+	return null
+}
+
+function resolveLegacyGeoDataDir(): string | null {
 	try {
 		const pkgPath = require.resolve('geoip-lite/package.json')
 		return path.join(path.dirname(pkgPath), 'data')
@@ -22,8 +44,47 @@ function resolveGeoDataDir(): string | null {
 	}
 }
 
-const geoDataDir = resolveGeoDataDir()
+let v4Table: GeoTable | null | undefined
+let v6Table: GeoTable | null | undefined
+
+function openGeoTable(version: 4 | 6): GeoTable | null {
+	const compactDir = resolveCompactDir()
+	if (compactDir) {
+		const filePath = path.join(compactDir, version === 4 ? 'geoip-v4.bin' : 'geoip-v6.bin')
+		const recSize = version === 4 ? COMPACT_SIZE_V4 : COMPACT_SIZE_V6
+		try {
+			const fd = openSync(filePath, 'r')
+			const totalRecords = Math.floor(fstatSync(fd).size / recSize)
+			if (totalRecords > 0) return {fd, totalRecords, compact: true}
+		} catch {}
+	}
+
+	const legacyDir = resolveLegacyGeoDataDir()
+	if (legacyDir) {
+		const filePath = path.join(legacyDir, version === 4 ? 'geoip-city.dat' : 'geoip-city6.dat')
+		const recSize = version === 4 ? RECORD_SIZE_V4 : RECORD_SIZE_V6
+		try {
+			const fd = openSync(filePath, 'r')
+			const totalRecords = Math.floor(fstatSync(fd).size / recSize)
+			if (totalRecords > 0) return {fd, totalRecords, compact: false}
+		} catch {}
+	}
+
+	return null
+}
+
+function getGeoTable(version: 4 | 6): GeoTable | null {
+	if (version === 4) {
+		if (v4Table === undefined) v4Table = openGeoTable(4)
+		return v4Table
+	}
+	if (v6Table === undefined) v6Table = openGeoTable(6)
+	return v6Table
+}
+
 const geoCache = new Map<string, LatLng | null>()
+const bufV4 = Buffer.allocUnsafe(RECORD_SIZE_V4)
+const bufV6 = Buffer.allocUnsafe(RECORD_SIZE_V6)
 
 function parseIpv4(ip: string): number | null {
 	const parts = ip.split('.')
@@ -81,77 +142,69 @@ function extractMappedIpv4(ip: string): string | null {
 	return null
 }
 
-// On-disk binary search over geoip-lite's sorted fixed-width .dat files.
-// Avoids loading ~105 MB of GeoIP tables into Node.js RAM at startup.
+// On-disk binary search over sorted fixed-width GeoIP tables (compact production .bin or geoip-lite .dat).
+// Uses cached file descriptors and avoids loading ~105 MB of GeoIP tables into Node.js RAM at startup.
 function lookupIpv4OnDisk(ipInt: number): LatLng | null {
-	if (!geoDataDir || isPrivateIpv4(ipInt)) return null
-	const filePath = path.join(geoDataDir, 'geoip-city.dat')
-	let fd: number | undefined
+	if (isPrivateIpv4(ipInt)) return null
+	const table = getGeoTable(4)
+	if (!table) return null
+	const recSize = table.compact ? COMPACT_SIZE_V4 : RECORD_SIZE_V4
 	try {
-		fd = openSync(filePath, 'r')
-		const totalRecords = Math.floor(fstatSync(fd).size / RECORD_SIZE_V4)
-		if (totalRecords <= 0) return null
-
-		const buf = Buffer.allocUnsafe(RECORD_SIZE_V4)
 		let low = 0
-		let high = totalRecords - 1
+		let high = table.totalRecords - 1
 
 		while (low <= high) {
 			const mid = (low + high) >>> 1
-			if (readSync(fd, buf, 0, RECORD_SIZE_V4, mid * RECORD_SIZE_V4) < RECORD_SIZE_V4) return null
-			const floor = buf.readUInt32BE(0)
-			const ceil = buf.readUInt32BE(4)
+			if (readSync(table.fd, bufV4, 0, recSize, mid * recSize) < recSize) return null
+			const floor = bufV4.readUInt32BE(0)
+			const ceil = bufV4.readUInt32BE(4)
 			if (ipInt < floor) {
 				high = mid - 1
 			} else if (ipInt > ceil) {
 				low = mid + 1
+			} else if (table.compact) {
+				return [bufV4.readInt16BE(8) / 100, bufV4.readInt16BE(10) / 100]
 			} else {
-				const locId = buf.readUInt32BE(8)
+				const locId = bufV4.readUInt32BE(8)
 				if (locId >= NO_LOCATION) return null
-				return [buf.readInt32BE(12) / 10000, buf.readInt32BE(16) / 10000]
+				return [bufV4.readInt32BE(12) / 10000, bufV4.readInt32BE(16) / 10000]
 			}
 		}
 		return null
 	} catch {
 		return null
-	} finally {
-		if (fd !== undefined) closeSync(fd)
 	}
 }
 
 function lookupIpv6OnDisk(prefix: bigint): LatLng | null {
-	if (!geoDataDir || isPrivateIpv6(prefix)) return null
-	const filePath = path.join(geoDataDir, 'geoip-city6.dat')
-	let fd: number | undefined
+	if (isPrivateIpv6(prefix)) return null
+	const table = getGeoTable(6)
+	if (!table) return null
+	const recSize = table.compact ? COMPACT_SIZE_V6 : RECORD_SIZE_V6
 	try {
-		fd = openSync(filePath, 'r')
-		const totalRecords = Math.floor(fstatSync(fd).size / RECORD_SIZE_V6)
-		if (totalRecords <= 0) return null
-
-		const buf = Buffer.allocUnsafe(RECORD_SIZE_V6)
 		let low = 0
-		let high = totalRecords - 1
+		let high = table.totalRecords - 1
 
 		while (low <= high) {
 			const mid = (low + high) >>> 1
-			if (readSync(fd, buf, 0, RECORD_SIZE_V6, mid * RECORD_SIZE_V6) < RECORD_SIZE_V6) return null
-			const floor = buf.readBigUInt64BE(0)
-			const ceil = buf.readBigUInt64BE(16)
+			if (readSync(table.fd, bufV6, 0, recSize, mid * recSize) < recSize) return null
+			const floor = bufV6.readBigUInt64BE(0)
+			const ceil = table.compact ? bufV6.readBigUInt64BE(8) : bufV6.readBigUInt64BE(16)
 			if (prefix < floor) {
 				high = mid - 1
 			} else if (prefix > ceil) {
 				low = mid + 1
+			} else if (table.compact) {
+				return [bufV6.readInt16BE(16) / 100, bufV6.readInt16BE(18) / 100]
 			} else {
-				const locId = buf.readUInt32BE(32)
+				const locId = bufV6.readUInt32BE(32)
 				if (locId >= NO_LOCATION) return null
-				return [buf.readInt32BE(36) / 10000, buf.readInt32BE(40) / 10000]
+				return [bufV6.readInt32BE(36) / 10000, bufV6.readInt32BE(40) / 10000]
 			}
 		}
 		return null
 	} catch {
 		return null
-	} finally {
-		if (fd !== undefined) closeSync(fd)
 	}
 }
 

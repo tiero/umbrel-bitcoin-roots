@@ -18,6 +18,28 @@ export default defineConfig({
 			},
 		},
 	},
+	build: {
+		target: 'es2022',
+		rollupOptions: {
+			output: {
+				manualChunks(id) {
+					if (!id.includes('node_modules')) return
+					if (/\/node_modules\/(react|react-dom|scheduler|react-router|react-router-dom)\//.test(id)) {
+						return 'vendor-react'
+					}
+					if (/\/node_modules\/(framer-motion|motion-dom|motion-utils)\//.test(id)) {
+						return 'vendor-motion'
+					}
+					if (/\/node_modules\/@radix-ui\//.test(id)) {
+						return 'vendor-radix'
+					}
+					if (/\/node_modules\/@tanstack\//.test(id)) {
+						return 'vendor-tanstack'
+					}
+				},
+			},
+		},
+	},
 	// Shadcn requirement
 	// https://ui.shadcn.com/docs/installation/vite
 	resolve: {

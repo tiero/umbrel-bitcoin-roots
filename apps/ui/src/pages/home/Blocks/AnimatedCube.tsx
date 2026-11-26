@@ -51,6 +51,12 @@ export function AnimatedCube({
 	const enteringSubPhaseRef = useRef<EnteringSubPhase>('spinning-in')
 	const [displaySubPhase, setDisplaySubPhase] = useState<EnteringSubPhase>('spinning-in')
 	const frontContentGroupRef = useRef<THREE.Group>(null!)
+	const lastAppliedOpacityRef = useRef(-1)
+
+	// Reset cached front-face opacity when content mounts or block changes
+	useEffect(() => {
+		lastAppliedOpacityRef.current = -1
+	}, [isLoading, block?.hash])
 
 	// Loading state refs
 	const displayHeightRef = useRef(0)
@@ -324,7 +330,7 @@ export function AnimatedCube({
 					// Smooth color transition from gray to green-tinted and back
 					const baseGray = 0.8
 					const greenTint = greenIntensity * 0.15
-					material.color = new THREE.Color(
+					material.color.setRGB(
 						baseGray - greenTint * 0.2, // Less red
 						baseGray + greenTint * 0.2, // More green
 						baseGray - greenTint * 0.1, // Slightly less blue
@@ -336,33 +342,33 @@ export function AnimatedCube({
 						const emissiveR = 0.1 * greenIntensity * 0
 						const emissiveG = 0.1 * greenIntensity * 1
 						const emissiveB = 0.1 * greenIntensity * 0.267
-						material.emissive = new THREE.Color(emissiveR, emissiveG, emissiveB)
+						material.emissive.setRGB(emissiveR, emissiveG, emissiveB)
 						material.emissiveIntensity = greenIntensity * 0.3
 					} else {
-						material.emissive = new THREE.Color(0x000000)
+						material.emissive.setHex(0x000000)
 						material.emissiveIntensity = 0
 					}
 				} else if (materialBlend.current > 0) {
 					// Entrance glow
 					material.metalness = 0.8 + 0.2 * materialBlend.current
 					material.roughness = 0.5 - 0.3 * materialBlend.current
-					material.color = new THREE.Color(0xcccccc)
-					material.emissive = new THREE.Color(0xcccccc)
+					material.color.setHex(0xcccccc)
+					material.emissive.setHex(0xcccccc)
 					material.emissiveIntensity = materialBlend.current * 0.1
 				} else {
 					// Default during entering but not glowing
 					material.metalness = 0.8
 					material.roughness = 0.5
-					material.color = new THREE.Color(0xcccccc)
-					material.emissive = new THREE.Color(0x000000)
+					material.color.setHex(0xcccccc)
+					material.emissive.setHex(0x000000)
 					material.emissiveIntensity = 0
 				}
 			} else {
 				// Default material for non-entering phases
 				material.metalness = 0.8
 				material.roughness = 0.5
-				material.color = new THREE.Color(0xcccccc)
-				material.emissive = new THREE.Color(0x000000)
+				material.color.setHex(0xcccccc)
+				material.emissive.setHex(0x000000)
 				material.emissiveIntensity = 0
 			}
 		}
@@ -372,11 +378,10 @@ export function AnimatedCube({
 			material.opacity = opacity.current * 0.8
 		}
 
-		// Update front content opacity during exit
-		if (frontContentGroupRef.current) {
-			// Set group visibility based on opacity
+		// Update front content opacity only when it meaningfully changes (avoids per-frame scene-graph traversal)
+		if (frontContentGroupRef.current && Math.abs(opacity.current - lastAppliedOpacityRef.current) > 0.002) {
+			lastAppliedOpacityRef.current = opacity.current
 			frontContentGroupRef.current.visible = opacity.current > 0.01
-			// Apply opacity to the group's render order
 			frontContentGroupRef.current.traverse((child) => {
 				if (child instanceof THREE.Mesh && child.material) {
 					const material = child.material as any

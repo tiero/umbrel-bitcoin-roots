@@ -21,7 +21,11 @@ bootBitcoind().catch((error) => {
 })
 
 // Create the HTTP server and register the routes
-const app = Fastify({logger: true})
+// Disable per-request access logging in production to avoid writing ~25k widget poll log lines/day.
+const app = Fastify({
+	logger: true,
+	disableRequestLogging: process.env['NODE_ENV'] === 'production',
+})
 
 // CSP
 await app.register(helmet, {
@@ -61,10 +65,20 @@ setInterval(() => {
 	}
 }, HEARTBEAT_MS)
 
-// serve ui static files from dist/public in production
+// Serve pre-compressed (.br / .gz) UI static files with aggressive caching for hashed Vite assets
 app.register(fastifyStatic, {
 	root: path.join(__dirname, 'public'),
 	wildcard: false, // do not serve index.html for all routes
+	preCompressed: true,
+	setHeaders(reply, filePath) {
+		if (filePath.includes(`${path.sep}assets${path.sep}`)) {
+			reply.header('Cache-Control', 'public, max-age=31536000, immutable')
+		} else if (/index\.html(\.(br|gz))?$/.test(filePath)) {
+			reply.header('Cache-Control', 'no-cache')
+		} else {
+			reply.header('Cache-Control', 'public, max-age=86400')
+		}
+	},
 })
 
 await app.register(routes)

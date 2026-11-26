@@ -113,31 +113,47 @@ COPY . .
 
 # build shared libraries (libs/*/dist)
 # build backend (ts → js) (apps/backend/dist)
-# bundle UI (vite build) (apps/ui/dist)
+# compact GeoIP tables (~98 MB -> ~30 MB) for on-disk binary search
+# bundle UI (vite build) + pre-compress (.br / .gz) static assets (apps/ui/dist)
 RUN tsc -b libs/shared-types libs/settings apps/backend \
- && npm run --workspace apps/ui build
+ && node scripts/compact-geoip.mjs apps/backend/dist/geoip \
+ && npm run --workspace apps/ui build \
+ && node scripts/precompress-ui.mjs apps/ui/dist
 
 ########################################
 # runtime stage — final production image
 ########################################
 FROM node:24.19.0-trixie-slim@sha256:ab3eebe934147fee049b5eb83c570f68c849a13c930bdfa482de99fcdfa3b3de AS runtime
+ARG TARGETARCH
 WORKDIR /app
 
-# Install production dependencies only
+# Install production dependencies only, then prune unused toolchains, GeoIP raw tables
+# (replaced by compacted dist/geoip/*.bin), and non-target ZeroMQ prebuilds.
 # Note: import-map lives in package.json, so is also needed so Node can resolve "#settings/#types"
 COPY package*.json ./
 COPY apps/backend/package*.json apps/backend/
-# npm is only needed to install dependencies; remove it and unused GeoIP tables from the production image.
-RUN npm ci --omit=dev --install-strategy=hoisted --ignore-scripts \
- && rm -rf /root/.npm /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx \
-    /app/node_modules/geoip-lite/data/geoip-city-names.dat \
-    /app/node_modules/geoip-lite/data/geoip-country.dat \
-    /app/node_modules/geoip-lite/data/geoip-country6.dat
+RUN set -eux; \
+    npm ci --omit=dev --install-strategy=hoisted --ignore-scripts; \
+    case "${TARGETARCH}" in \
+      amd64) zmq_arch='x64' ;; \
+      arm64) zmq_arch='arm64' ;; \
+      *) echo "Unsupported TARGETARCH: ${TARGETARCH}" >&2; exit 1 ;; \
+    esac; \
+    rm -rf /root/.npm /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
+      /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack /usr/local/bin/yarn /usr/local/bin/yarnpkg /opt/yarn* \
+      /usr/share/doc /usr/share/man \
+      /app/node_modules/geoip-lite \
+      /app/node_modules/zeromq/build/darwin /app/node_modules/zeromq/build/win32 \
+      /app/node_modules/zeromq/src; \
+    find /app/node_modules/zeromq/build/linux -mindepth 1 -maxdepth 1 ! -name "${zmq_arch}" -exec rm -rf {} +; \
+    find "/app/node_modules/zeromq/build/linux/${zmq_arch}/node" -mindepth 1 -maxdepth 1 ! -name 'glibc-127-Release' -exec rm -rf {} +; \
+    find /app/node_modules -type f \( -name '*.md' -o -name '*.map' -o -name '*.d.ts' \) -delete; \
+    node -e "import('zeromq').then(() => console.log('zeromq prebuild ok'))"
 
-# Backend JS bundle
+# Backend JS bundle (includes compacted dist/geoip/*.bin)
 COPY --from=app-builder /repo/apps/backend/dist ./dist
 
-# Pre-bundled React UI → backend serves this from /public/*
+# Pre-bundled & pre-compressed React UI → backend serves this from /public/*
 COPY --from=app-builder /repo/apps/ui/dist ./dist/public
 
 # Compiled shared libs (referenced at runtime via import-map)
@@ -148,31 +164,21 @@ COPY --from=app-builder /repo/libs/shared-types/dist ./libs/shared-types/dist
 # - bitcoind: normal monolithic daemon
 # - bitcoin-cli: RPC client used by the backend and manual container execs
 # - bitcoin + bitcoin-node: multiprocess IPC mode
-RUN mkdir -p /opt/bitcoind/v30.3-roots.1
 COPY --from=bitcoind_30_3_roots_1 /bin/bitcoind         /opt/bitcoind/v30.3-roots.1/bitcoind
 COPY --from=bitcoind_30_3_roots_1 /bin/bitcoin-cli      /opt/bitcoind/v30.3-roots.1/bitcoin-cli
 COPY --from=bitcoind_30_3_roots_1 /bin/bitcoin          /opt/bitcoind/v30.3-roots.1/bitcoin
 COPY --from=bitcoind_30_3_roots_1 /usr/bin/bitcoin-node /opt/bitcoind/v30.3-roots.1/bitcoin-node
 
-# Give 1000:1000 write permissions to /opt/bitcoind itself so we can flip
-# the current-version symlink while the container runs as 1000:1000.
-RUN chown 1000:1000 /opt/bitcoind
-
-# Symbolic links for default Bitcoin Roots binaries
-# By default we point to the latest version of Bitcoin Roots
-RUN ln -sfn /opt/bitcoind/v30.3-roots.1 /opt/bitcoind/current
-RUN ln -sfn /opt/bitcoind/current/bitcoind     /usr/local/bin/bitcoind
-RUN ln -sfn /opt/bitcoind/current/bitcoin-cli  /usr/local/bin/bitcoin-cli
-RUN ln -sfn /opt/bitcoind/current/bitcoin      /usr/local/bin/bitcoin
-RUN ln -sfn /opt/bitcoind/current/bitcoin-node /usr/local/bin/bitcoin-node
-
-# Exercise the daemon, RPC client, and multiprocess wrapper on the target platform.
-RUN bitcoind --version && bitcoin-cli --version && bitcoin -m node --version
-
-# Symlink for datadir so bitcoin-cli auto-finds the RPC cookie
-# Allows exec'ing bitcoin-cli inside the container without specifying credentials
-RUN ln -sfn /data/bitcoin /root/.bitcoin
-RUN mkdir -p /home/node \
+# Flip-ready symlink layout + binary sanity check + datadir symlinks in a single layer
+RUN chown 1000:1000 /opt/bitcoind \
+ && ln -sfn /opt/bitcoind/v30.3-roots.1 /opt/bitcoind/current \
+ && ln -sfn /opt/bitcoind/current/bitcoind     /usr/local/bin/bitcoind \
+ && ln -sfn /opt/bitcoind/current/bitcoin-cli  /usr/local/bin/bitcoin-cli \
+ && ln -sfn /opt/bitcoind/current/bitcoin      /usr/local/bin/bitcoin \
+ && ln -sfn /opt/bitcoind/current/bitcoin-node /usr/local/bin/bitcoin-node \
+ && bitcoind --version && bitcoin-cli --version && bitcoin -m node --version \
+ && ln -sfn /data/bitcoin /root/.bitcoin \
+ && mkdir -p /home/node \
  && ln -sfn /data/bitcoin /home/node/.bitcoin \
  && chown -h 1000:1000 /home/node/.bitcoin
 

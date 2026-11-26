@@ -10,11 +10,16 @@ import InsightsIcon from '@/assets/insights.svg?react'
 import SettingsIcon from '@/assets/settings.svg?react'
 
 import {GradientBorderFromTop} from '@/components/shared/GradientBorders'
+import {usePrefetchInsights} from '@/hooks/usePrefetchInsights'
 
 import {cn} from '@/lib/utils'
 
+const prefetchHome = () => void import('@/pages/home')
+const prefetchSettings = () => void import('@/pages/settings')
+
 export default function Dock({className}: {className?: string}) {
 	const {pathname} = useLocation()
+	const prefetchInsights = usePrefetchInsights()
 	// We don't have subroutes, so exact matching covers all valid paths
 	// and allows the Dock to not show a selected tab on 404 routes that start with a valid route (e.g. '/insightss')
 	// Query parameters (?tab=advanced) don't affect pathname, so this is safe
@@ -33,13 +38,14 @@ export default function Dock({className}: {className?: string}) {
 			<TabsList className='relative flex rounded-full bg-dock-gradient py-6 px-1.5 backdrop-blur-2xl ring-white/6'>
 				<GradientBorderFromTop />
 
-				<DockTrigger value='/' to='/' Icon={HomeIcon} label='Home' active={activeTab === '/'} />
+				<DockTrigger value='/' to='/' Icon={HomeIcon} label='Home' active={activeTab === '/'} onIntent={prefetchHome} />
 				<DockTrigger
 					value='insights'
 					to='/insights'
 					Icon={InsightsIcon}
 					label='Insights'
 					active={activeTab === 'insights'}
+					onIntent={prefetchInsights}
 				/>
 				<DockTrigger
 					value='settings'
@@ -47,6 +53,7 @@ export default function Dock({className}: {className?: string}) {
 					Icon={SettingsIcon}
 					label='Settings'
 					active={activeTab === 'settings'}
+					onIntent={prefetchSettings}
 				/>
 			</TabsList>
 		</Tabs>
@@ -59,12 +66,14 @@ function DockTrigger({
 	Icon,
 	label,
 	active,
+	onIntent,
 }: {
 	value: string
 	to: string
 	Icon: React.FC<React.SVGProps<SVGSVGElement>>
 	label: string
 	active: boolean
+	onIntent?: () => void
 }) {
 	return (
 		<TabsTrigger
@@ -74,6 +83,8 @@ function DockTrigger({
 		>
 			<NavLink
 				to={to}
+				onMouseEnter={onIntent}
+				onFocus={onIntent}
 				className='group relative inline-flex items-center gap-1 rounded-full text-white/60 transition-colors data-[state=active]:text-white data-[state=active]:delay-[200ms]'
 			>
 				{/* This is the sliding pill that only exists inside the active trigger, and is used to create the illusion of a pill sliding between the tabs.*/}

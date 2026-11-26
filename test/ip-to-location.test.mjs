@@ -1,4 +1,8 @@
 import assert from 'node:assert/strict'
+import {execFileSync} from 'node:child_process'
+import {mkdtempSync, rmSync} from 'node:fs'
+import {tmpdir} from 'node:os'
+import path from 'node:path'
 import {test} from 'node:test'
 import {ipToLatLng} from '../dist/modules/peers/ip-to-location.js'
 
@@ -29,4 +33,38 @@ test('ipToLatLng resolves public IPv4/IPv6 via on-disk binary search with minima
 	// Verify GeoIP tables and cities.json were NOT loaded into RAM (~318 MB before vs <90 MB now)
 	const rssMb = process.memoryUsage().rss / 1024 / 1024
 	assert.ok(rssMb < 100, `Expected RSS < 100 MB, got ${rssMb.toFixed(1)} MB`)
+})
+
+test('compact GeoIP binary tables agree with raw geoip-lite within 0.25 degrees', () => {
+	const tmpDir = mkdtempSync(path.join(tmpdir(), 'geoip-compact-'))
+	try {
+		execFileSync(process.execPath, ['scripts/compact-geoip.mjs', tmpDir], {stdio: 'pipe'})
+
+		const googleDns = ['8', '8', '8', '8'].join('.')
+		const cloudflareV6 = ['2606', '4700', '4700', '', '1111'].join(':')
+		const rawV4 = ipToLatLng(googleDns, 'ipv4')
+		const rawV6 = ipToLatLng(cloudflareV6, 'ipv6')
+
+		const out = execFileSync(
+			process.execPath,
+			[
+				'-e',
+				`import {ipToLatLng} from './dist/modules/peers/ip-to-location.js';
+				console.log(JSON.stringify({
+					v4: ipToLatLng(${JSON.stringify(googleDns)}, 'ipv4'),
+					v6: ipToLatLng(${JSON.stringify(cloudflareV6)}, 'ipv6'),
+					rssMb: process.memoryUsage().rss / 1024 / 1024,
+				}));`,
+			],
+			{env: {...process.env, GEOIP_DATA_DIR: tmpDir}, encoding: 'utf8'},
+		)
+		const compact = JSON.parse(out.trim())
+		assert.ok(Math.abs(compact.v4[0] - rawV4[0]) <= 0.25, `v4 lat mismatch: ${compact.v4} vs ${rawV4}`)
+		assert.ok(Math.abs(compact.v4[1] - rawV4[1]) <= 0.25, `v4 lng mismatch: ${compact.v4} vs ${rawV4}`)
+		assert.ok(Math.abs(compact.v6[0] - rawV6[0]) <= 0.25, `v6 lat mismatch: ${compact.v6} vs ${rawV6}`)
+		assert.ok(Math.abs(compact.v6[1] - rawV6[1]) <= 0.25, `v6 lng mismatch: ${compact.v6} vs ${rawV6}`)
+		assert.ok(compact.rssMb < 100, `Expected compact RSS < 100 MB, got ${compact.rssMb.toFixed(1)} MB`)
+	} finally {
+		rmSync(tmpDir, {recursive: true, force: true})
+	}
 })
