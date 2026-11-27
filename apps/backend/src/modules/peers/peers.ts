@@ -100,6 +100,7 @@ export async function peerLocations(): Promise<PeerLocationsResponse> {
 		}
 	}
 
-	// Fallback to central South America default if user has no geolocatable clearnet IP
-	return {userLocation: userLocation ?? [-15.7942, -47.8822], peers}
+	// Fallback to the deterministic 64-city weighted list if user has no geolocatable clearnet IP
+	const fallbackSeed = rankedHosts[0]?.[0] ?? '0.0.0.0'
+	return {userLocation: userLocation ?? ipToLatLng(fallbackSeed, 'ipv4'), peers}
 }
