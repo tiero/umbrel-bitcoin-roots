@@ -47,7 +47,6 @@ export function AnimatedCube({
 	const opacity = useRef(1)
 	const materialBlend = useRef(0)
 	const prevPhaseRef = useRef<AnimationPhase | null>(null)
-	const mouseRef = useRef({x: 0, y: 0})
 	const enteringSubPhaseRef = useRef<EnteringSubPhase>('spinning-in')
 	const [displaySubPhase, setDisplaySubPhase] = useState<EnteringSubPhase>('spinning-in')
 	const frontContentGroupRef = useRef<THREE.Group>(null!)
@@ -70,11 +69,6 @@ export function AnimatedCube({
 		}
 	}, [syncProgress])
 
-	// Update mouse ref whenever globalMouse changes
-	useEffect(() => {
-		mouseRef.current = globalMouse
-	}, [globalMouse])
-
 	// Reset animation values when phase changes
 	useEffect(() => {
 		// Only reset if phase actually changed
@@ -86,8 +80,8 @@ export function AnimatedCube({
 			// Reset for entering animation
 			scale.current = 0
 			opacity.current = 0
-			rotation.current.y = Math.PI + mouseRef.current.x * ANIMATION_CONFIG.MAX_ROTATION // Back face + current mouse rotation
-			rotation.current.x = -mouseRef.current.y * ANIMATION_CONFIG.MAX_ROTATION // Apply current mouse X rotation
+			rotation.current.y = Math.PI + globalMouse.current.x * ANIMATION_CONFIG.MAX_ROTATION // Back face + current mouse rotation
+			rotation.current.x = -globalMouse.current.y * ANIMATION_CONFIG.MAX_ROTATION // Apply current mouse X rotation
 			rotation.current.z = 0 // Reset Z rotation
 			position.current.x = baseX
 			position.current.y = 0
@@ -98,8 +92,8 @@ export function AnimatedCube({
 			// Reset to default values
 			scale.current = 1
 			opacity.current = 1
-			rotation.current.y = mouseRef.current.x * ANIMATION_CONFIG.MAX_ROTATION // Apply current mouse rotation
-			rotation.current.x = -mouseRef.current.y * ANIMATION_CONFIG.MAX_ROTATION
+			rotation.current.y = globalMouse.current.x * ANIMATION_CONFIG.MAX_ROTATION // Apply current mouse rotation
+			rotation.current.x = -globalMouse.current.y * ANIMATION_CONFIG.MAX_ROTATION
 			rotation.current.z = 0 // Reset Z rotation
 			position.current.x = baseX
 			position.current.y = 0
@@ -107,7 +101,7 @@ export function AnimatedCube({
 			enteringSubPhaseRef.current = 'spinning-in'
 			setDisplaySubPhase('spinning-in')
 		}
-	}, [animationState.phase, baseX]) // Only run when phase or baseX changes, not mouse movement
+	}, [animationState.phase, baseX, globalMouse]) // Only run when phase or baseX changes, not mouse movement
 
 	useFrame((_, delta) => {
 		if (!groupRef.current) return
@@ -286,8 +280,8 @@ export function AnimatedCube({
 		opacity.current += (targetOpacity - opacity.current) * lerpFactor
 
 		// Mouse tracking rotation
-		const mouseRotationY = globalMouse.x * ANIMATION_CONFIG.MAX_ROTATION + targetRotationY
-		const mouseRotationX = -globalMouse.y * ANIMATION_CONFIG.MAX_ROTATION
+		const mouseRotationY = globalMouse.current.x * ANIMATION_CONFIG.MAX_ROTATION + targetRotationY
+		const mouseRotationX = -globalMouse.current.y * ANIMATION_CONFIG.MAX_ROTATION
 
 		// For entering animations, apply rotation directly to avoid lag
 		if (animationState.phase === 'entering') {

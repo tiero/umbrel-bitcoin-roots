@@ -44,6 +44,7 @@ const TX_SPHERE_COLOR = '#E15364'
 const TX_SPEED = 125 // units per second
 const MAX_SPHERES_PER_UPDATE = 20 // Max spheres to spawn per transaction count update
 const MAX_CONCURRENT_SPHERES = 75 // Max total spheres animating simultaneously
+const RENDERER_CONFIG = {antialias: true, alpha: true, powerPreference: 'default' as const}
 
 // If WebGL is not supported, show a static image of the globe
 // This will happen on Tor Browser and some older browsers
@@ -80,10 +81,14 @@ function LiveGlobeWebGL({width = 650, height = 650}: {width?: number; height?: n
 	// Reusable geometries and materials for better performance
 	const sphereGeometryRef = useRef<THREE.SphereGeometry>(new THREE.SphereGeometry(TX_SPHERE_RADIUS, 8, 6))
 	const sphereMaterialRef = useRef<THREE.MeshBasicMaterial>(new THREE.MeshBasicMaterial({color: TX_SPHERE_COLOR}))
+	const animationIdRef = useRef<number | null>(null)
+	const arcsDataRef = useRef<Array<{startLat: number; startLng: number; endLat: number; endLng: number}>>([])
+	const userLocationRef = useRef<[number, number] | undefined>(undefined)
+	const hasCenteredOnUserRef = useRef(false)
+	const arcCursorRef = useRef(0)
 
 	const {data} = usePeerLocations()
-	const txCount = useTransactionSocket()
-	const lastTxCount = useRef(txCount)
+	userLocationRef.current = data?.userLocation
 
 	// Snap a peer location marker to the map grid
 	const snapToMap = useCallback(
@@ -221,15 +226,27 @@ function LiveGlobeWebGL({width = 650, height = 650}: {width?: number; height?: n
 		// we re-run this effect when the globe is ready since we defer initialization
 	}, [shouldInitialize])
 
-	// Set initial camera (tilt globe toward northern hemisphere and center near North America) and ensure controls (auto-rotate, no zoom) once globe is ready
+	// Set initial camera (center on user's node if available, else northern hemisphere) and ensure controls once globe is ready
 	const handleGlobeReady = useCallback(() => {
 		if (!globeRef.current) return
 		const controls = globeRef.current.controls()
 		controls.autoRotate = true
 		controls.autoRotateSpeed = AUTO_ROTATE_SPEED
 		controls.enableZoom = false
-		globeRef.current.pointOfView({lat: 30, lng: -80}, 0)
+		if (Array.isArray(userLocationRef.current)) {
+			hasCenteredOnUserRef.current = true
+			globeRef.current.pointOfView({lat: userLocationRef.current[0], lng: userLocationRef.current[1]}, 0)
+		} else {
+			globeRef.current.pointOfView({lat: 30, lng: -80}, 0)
+		}
 	}, [])
+
+	// Once userLocation loads for the first time after the globe is ready, gently center on the user's node
+	useEffect(() => {
+		if (!globeRef.current || hasCenteredOnUserRef.current || !Array.isArray(data?.userLocation)) return
+		hasCenteredOnUserRef.current = true
+		globeRef.current.pointOfView({lat: data.userLocation[0], lng: data.userLocation[1]}, 800)
+	}, [data?.userLocation, shouldInitialize])
 
 	// Add custom arcs that match sphere paths
 	useEffect(() => {
@@ -274,108 +291,128 @@ function LiveGlobeWebGL({width = 650, height = 650}: {width?: number; height?: n
 		// We make sure to re-run this effect when the globe is ready since we defer initialization (`shouldInitialize`)
 	}, [arcsData, latLngToVector3, slerpOnSphere, shouldInitialize])
 
-	// Animate spheres along arc lines when transactions come in
+	// Keep latest arcs in a ref so WebSocket tx pings spawn spheres with zero React re-renders
 	useEffect(() => {
-		// The backend collapses every 33 ms slice of transactions into one websocket message that carries `count = #txs` .
-		// `txCount` is the total of all counts we've received while the ws is open.
-		// We derive `needed = txCount - lastTxCount` and spawn that many spheres in one render pass, so every transaction is visualised once while message traffic stays capped at ≤30 frames / sec.
-		const needed = txCount - lastTxCount.current
-		if (needed <= 0) return
-		lastTxCount.current = txCount
+		arcsDataRef.current = arcsData
+	}, [arcsData])
 
-		if (!globeRef.current || !arcsData.length) return
+	const runSphereAnimation = useCallback(() => {
+		if (!globeRef.current || document.hidden) {
+			animationIdRef.current = null
+			return
+		}
 
-		// Performance protection: we limit sphere creation to 20 per update and 75 total on the sphere at once
-		const currentActiveSpheres = animatedSpheresRef.current.length
-		const availableSlots = MAX_CONCURRENT_SPHERES - currentActiveSpheres
-		const spheresToCreate = Math.min(needed, MAX_SPHERES_PER_UPDATE, availableSlots)
-
-		// return early if no slots available
-		if (spheresToCreate <= 0) return
-
+		const now = Date.now()
 		const scene = globeRef.current.scene()
 
-		for (let i = 0; i < spheresToCreate; i++) {
-			const randomIndex = Math.floor(Math.random() * arcsData.length)
-			const randomArc = arcsData[randomIndex]
+		animatedSpheresRef.current = animatedSpheresRef.current.filter(
+			({sphere, startVec, endVec, startTime, duration}) => {
+				const elapsed = now - startTime
+				if (elapsed < duration) {
+					const position = slerpOnSphere(startVec, endVec, elapsed / duration)
+					sphere.position.copy(position)
+					return true
+				}
+				scene.remove(sphere)
+				return false
+			},
+		)
 
-			const sphere = new THREE.Mesh(sphereGeometryRef.current, sphereMaterialRef.current)
-
-			const startVec = latLngToVector3(randomArc.startLat, randomArc.startLng)
-			const endVec = latLngToVector3(randomArc.endLat, randomArc.endLng)
-
-			// Calculate arc length for constant speed
-			const angle = startVec.angleTo(endVec)
-			const RADIUS = 100
-			const altitude = ARC_BASE_ALTITUDE
-			const r = RADIUS * (1 + altitude)
-			const arcHeight = Math.sin(Math.PI * 0.5) * angle * RADIUS * ARC_HEIGHT_MULTIPLIER
-			const approximateArcLength = angle * (r + arcHeight * 0.5)
-
-			// ms to complete the arc
-			const duration = (approximateArcLength / TX_SPEED) * 1000
-
-			sphere.position.copy(startVec)
-			scene.add(sphere)
-
-			// Store animation data for each sphere
-			animatedSpheresRef.current.push({
-				sphere,
-				startVec,
-				endVec,
-				startTime: Date.now(),
-				duration: duration,
-			})
+		if (animatedSpheresRef.current.length > 0 && globeRef.current) {
+			animationIdRef.current = requestAnimationFrame(runSphereAnimation)
+		} else {
+			animationIdRef.current = null
 		}
-	}, [txCount, arcsData, latLngToVector3])
+	}, [slerpOnSphere])
 
-	// Animation loop
-	useEffect(() => {
-		if (!globeRef.current) return
+	const handleTxPing = useCallback(
+		(needed: number) => {
+			const arcs = arcsDataRef.current
+			if (!globeRef.current || !arcs.length || document.hidden) return
 
-		let animationId: number | null = null
+			const availableSlots = MAX_CONCURRENT_SPHERES - animatedSpheresRef.current.length
+			const spheresToCreate = Math.min(needed, MAX_SPHERES_PER_UPDATE, availableSlots)
+			if (spheresToCreate <= 0) return
 
-		const animate = () => {
-			// Check if component is still mounted and globe exists
-			if (!globeRef.current) return
-
-			const now = Date.now()
 			const scene = globeRef.current.scene()
+			const now = Date.now()
 
-			// Update sphere positions
-			animatedSpheresRef.current = animatedSpheresRef.current.filter(
-				({sphere, startVec, endVec, startTime, duration}) => {
-					const elapsed = now - startTime
+			for (let i = 0; i < spheresToCreate; i++) {
+				const randomArc = arcs[arcCursorRef.current % arcs.length]
+				arcCursorRef.current = (arcCursorRef.current + 1) % arcs.length
+				const sphere = new THREE.Mesh(sphereGeometryRef.current, sphereMaterialRef.current)
 
-					if (elapsed < duration) {
-						const progress = elapsed / duration
-						const position = slerpOnSphere(startVec, endVec, progress)
-						sphere.position.copy(position)
-						return true
-					} else {
-						// Remove completed sphere (don't dispose shared geometry/material)
-						scene.remove(sphere)
-						return false
-					}
-				},
-			)
+				const startVec = latLngToVector3(randomArc.startLat, randomArc.startLng)
+				const endVec = latLngToVector3(randomArc.endLat, randomArc.endLng)
 
-			if (animatedSpheresRef.current.length > 0 && globeRef.current) {
-				animationId = requestAnimationFrame(animate)
+				const angle = startVec.angleTo(endVec)
+				const RADIUS = 100
+				const r = RADIUS * (1 + ARC_BASE_ALTITUDE)
+				const arcHeight = angle * RADIUS * ARC_HEIGHT_MULTIPLIER
+				const approximateArcLength = angle * (r + arcHeight * 0.5)
+				const duration = (approximateArcLength / TX_SPEED) * 1000
+
+				sphere.position.copy(startVec)
+				scene.add(sphere)
+
+				animatedSpheresRef.current.push({
+					sphere,
+					startVec,
+					endVec,
+					startTime: now,
+					duration,
+				})
+			}
+
+			if (animationIdRef.current === null) {
+				animationIdRef.current = requestAnimationFrame(runSphereAnimation)
+			}
+		},
+		[latLngToVector3, runSphereAnimation],
+	)
+
+	useTransactionSocket(handleTxPing)
+
+	// Pause Globe WebGL animation and drop in-flight tx spheres while the browser tab is hidden
+	useEffect(() => {
+		const clearSpheres = () => {
+			if (animationIdRef.current !== null) {
+				cancelAnimationFrame(animationIdRef.current)
+				animationIdRef.current = null
+			}
+			if (globeRef.current && animatedSpheresRef.current.length > 0) {
+				const scene = globeRef.current.scene()
+				for (const item of animatedSpheresRef.current) scene.remove(item.sphere)
+			}
+			animatedSpheresRef.current = []
+		}
+
+		const onVisibilityChange = () => {
+			if (!globeRef.current) return
+			if (document.hidden) {
+				clearSpheres()
+				globeRef.current.pauseAnimation?.()
+			} else {
+				globeRef.current.resumeAnimation?.()
 			}
 		}
 
-		if (animatedSpheresRef.current.length > 0) {
-			animate()
-		}
-
-		// Cleanup animation on unmount
+		document.addEventListener('visibilitychange', onVisibilityChange)
 		return () => {
-			if (animationId) {
-				cancelAnimationFrame(animationId)
-			}
+			document.removeEventListener('visibilitychange', onVisibilityChange)
+			clearSpheres()
 		}
-	}, [txCount, slerpOnSphere])
+	}, [])
+
+	// Dispose shared sphere geometry & material on unmount
+	useEffect(() => {
+		const geometry = sphereGeometryRef.current
+		const material = sphereMaterialRef.current
+		return () => {
+			geometry.dispose()
+			material.dispose()
+		}
+	}, [])
 
 	// Fade in effect after initial render
 	useEffect(() => {
@@ -399,8 +436,8 @@ function LiveGlobeWebGL({width = 650, height = 650}: {width?: number; height?: n
 				// Performance optimizations
 				enablePointerInteraction={false}
 				waitForGlobeReady={true}
-				// Configuration for ThreeJS WebGLRenderer: antialias=smooth edges, alpha=transparency support, powerPreference=use high-performance GPU
-				rendererConfig={{antialias: true, alpha: true, powerPreference: 'high-performance'}}
+				// Configuration for ThreeJS WebGLRenderer: antialias=smooth edges, alpha=transparency support
+				rendererConfig={RENDERER_CONFIG}
 				// atmosphere
 				atmosphereColor={ATMOSPHERE_COLOR}
 				atmosphereAltitude={ATMOSPHERE_ALTITUDE}

@@ -1,8 +1,8 @@
-import {useState, useEffect} from 'react'
+import {useEffect, useRef} from 'react'
 
-// Hook to track global mouse position
+// Ref-backed global mouse tracker so cursor movement never triggers React re-renders
 export function useGlobalMouse() {
-	const [mouse, setMouse] = useState({x: 0, y: 0})
+	const mouseRef = useRef({x: 0, y: 0})
 
 	useEffect(() => {
 		const handleMouseMove = (event: MouseEvent) => {
@@ -12,18 +12,21 @@ export function useGlobalMouse() {
 				event.clientY >= 0 &&
 				event.clientY <= window.innerHeight
 			) {
-				const x = (event.clientX / window.innerWidth) * 2 - 1
-				const y = -(event.clientY / window.innerHeight) * 2 + 1
-				setMouse({x, y})
+				mouseRef.current.x = (event.clientX / window.innerWidth) * 2 - 1
+				mouseRef.current.y = -(event.clientY / window.innerHeight) * 2 + 1
 			} else {
-				setMouse({x: 0, y: 0})
+				mouseRef.current.x = 0
+				mouseRef.current.y = 0
 			}
 		}
 
-		const handleMouseLeave = () => setMouse({x: 0, y: 0})
+		const handleMouseLeave = () => {
+			mouseRef.current.x = 0
+			mouseRef.current.y = 0
+		}
 
-		document.addEventListener('mousemove', handleMouseMove)
-		document.addEventListener('mouseleave', handleMouseLeave)
+		document.addEventListener('mousemove', handleMouseMove, {passive: true})
+		document.addEventListener('mouseleave', handleMouseLeave, {passive: true})
 
 		return () => {
 			document.removeEventListener('mousemove', handleMouseMove)
@@ -31,5 +34,5 @@ export function useGlobalMouse() {
 		}
 	}, [])
 
-	return mouse
+	return mouseRef
 }
