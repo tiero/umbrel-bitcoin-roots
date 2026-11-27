@@ -1,11 +1,15 @@
 import {rpcClient} from '../bitcoind/rpc-client.js'
 
-import {ipToLatLng} from './ip-to-location.js'
+import {ipToLatLng, lookupPublicIpLatLng} from './ip-to-location.js'
 
 import type {PeerInfo, PeerCount, PeerLocation, PeerLocationsResponse} from '#types'
 
 // Cached getpeerinfo response (5s TTL + in-flight deduplication)
 const getPeerInfoRPC = () => rpcClient.cachedCommand<PeerInfo[]>(5_000, 'getpeerinfo')
+
+type NetworkInfoLocalAddress = {address: string; port: number; score: number}
+type NetworkInfoPartial = {localaddresses?: NetworkInfoLocalAddress[]}
+const getNetworkInfoRPC = () => rpcClient.cachedCommand<NetworkInfoPartial>(30_000, 'getnetworkinfo')
 
 // Raw bitcoind getpeerinfo response
 export async function peerInfo(): Promise<PeerInfo[]> {
@@ -67,21 +71,35 @@ export async function peerLocations(): Promise<PeerLocationsResponse> {
 		hostTally.set(host, (hostTally.get(host) ?? 0) + 1)
 	}
 
-	// We pick the most-frequent host, if any (just in case there are other IPs listed somehow, like internal IPs for apps)
-	let topHost = ''
-	let topCount = 0
-
-	for (const [host, count] of hostTally) {
-		if (count > topCount) {
-			topHost = host
-			topCount = count
+	// Pick the most-frequent public addrlocal that actually geolocates (never let a private/Docker
+	// IP win and hash to a random fallback city).
+	const rankedHosts = [...hostTally.entries()].sort((a, b) => b[1] - a[1])
+	let userLocation: [number, number] | null = null
+	for (const [host] of rankedHosts) {
+		const geo = lookupPublicIpLatLng(host)
+		if (geo) {
+			userLocation = geo
+			break
 		}
 	}
 
-	// convert to latitude/longitude
-	const userLocation: [number, number] = topHost
-		? ipToLatLng(topHost, 'ipv4') // real clearnet IP
-		: [-15.7942, -47.8822] // fallback to central South America default if user has no clearnet peers
+	// Secondary check: bitcoind's discovered external localaddresses (sorted by score)
+	if (!userLocation) {
+		try {
+			const netInfo = await getNetworkInfoRPC()
+			const locals = [...(netInfo.localaddresses ?? [])].sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+			for (const entry of locals) {
+				const geo = lookupPublicIpLatLng(entry.address)
+				if (geo) {
+					userLocation = geo
+					break
+				}
+			}
+		} catch {
+			// Ignore transient RPC errors; fall through to default marker
+		}
+	}
 
-	return {userLocation, peers}
+	// Fallback to central South America default if user has no geolocatable clearnet IP
+	return {userLocation: userLocation ?? [-15.7942, -47.8822], peers}
 }

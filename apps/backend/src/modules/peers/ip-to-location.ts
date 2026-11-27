@@ -102,7 +102,9 @@ function isPrivateIpv4(ip: number): boolean {
 	const first = (ip >>> 24) & 0xff
 	const second = (ip >>> 16) & 0xff
 	return (
+		first === 0 ||
 		first === 10 ||
+		(first === 100 && second >= 64 && second <= 127) || // CGNAT (RFC 6598)
 		first === 127 ||
 		(first === 172 && second >= 16 && second <= 31) ||
 		(first === 192 && second === 168) ||
@@ -328,8 +330,15 @@ const fallbackCityCoords: readonly LatLng[] = [
 	[52.22977, 21.01178], // Warsaw|PL
 ]
 
+// Looks up a real public IPv4/IPv6 coordinate without falling back to a synthetic city.
+// Returns null for private/CGNAT/loopback addresses or unknown ranges.
+export function lookupPublicIpLatLng(ip: string): LatLng | null {
+	const geo = lookupGeoLatLng(ip)
+	return geo ? [geo[0], geo[1]] : null
+}
+
 // Returns a latitude and longitude for a given IP address and network.
-// If it is a public ipv4/ipv6 address found in geoip-lite's binary database, returns its [lat, lng].
+// If it is a public ipv4/ipv6 address found in the GeoIP binary database, returns its [lat, lng].
 // Otherwise returns a deterministic city from the 64-entry curated list.
 export function ipToLatLng(ip: string, network: string): LatLng {
 	if (network === 'ipv4' || network === 'ipv6') {

@@ -88,10 +88,19 @@ function compactV6(srcFile, dstFile) {
 		const off = i * 48
 		const loc = data.readUInt32BE(off + 32)
 		if (loc >= NO_LOCATION) continue
-		const floor = data.readBigUInt64BE(off)
+		let floor = data.readBigUInt64BE(off)
 		const ceil = data.readBigUInt64BE(off + 16)
 		const lat = quantizeDeg100(data.readInt32BE(off + 36))
 		const lng = quantizeDeg100(data.readInt32BE(off + 40))
+
+		if (hasPrev && floor <= prevCeil) {
+			if (ceil <= prevCeil) continue
+			if (lat === prevLat && lng === prevLng) {
+				prevCeil = ceil
+				continue
+			}
+			floor = prevCeil + 1n
+		}
 
 		if (hasPrev && lat === prevLat && lng === prevLng && floor <= prevCeil + 1n) {
 			if (ceil > prevCeil) prevCeil = ceil

@@ -152,6 +152,8 @@ RUN set -eux; \
 
 # Backend JS bundle (includes compacted dist/geoip/*.bin)
 COPY --from=app-builder /repo/apps/backend/dist ./dist
+# Verify compacted GeoIP tables load cleanly without geoip-lite and resolve real coordinates
+RUN node -e "import('./dist/modules/peers/ip-to-location.js').then(({lookupPublicIpLatLng}) => { const it = lookupPublicIpLatLng('87.0.1.1'); const us = lookupPublicIpLatLng('8.8.8.8'); const v6 = lookupPublicIpLatLng('2606:4700:4700::1111'); if (!it || it[0] < 35 || it[0] > 48 || it[1] < 6 || it[1] > 19 || !us || !v6) throw new Error('GeoIP sanity check failed: ' + JSON.stringify({it, us, v6})); console.log('geoip compact ok', {it, us, v6}); })"
 
 # Pre-bundled & pre-compressed React UI → backend serves this from /public/*
 COPY --from=app-builder /repo/apps/ui/dist ./dist/public
