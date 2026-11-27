@@ -1,9 +1,10 @@
 import {mkdirSync, openSync, readFileSync, closeSync, writeSync} from 'node:fs'
 import {createRequire} from 'node:module'
 import path from 'node:path'
+import {fileURLToPath} from 'node:url'
 
 const require = createRequire(import.meta.url)
-const outDir = path.resolve(process.argv[2] ?? 'apps/backend/dist/geoip')
+const DEFAULT_OUT_DIR = path.resolve('apps/backend/dist/geoip')
 const geoDataDir = path.join(path.dirname(require.resolve('geoip-lite/package.json')), 'data')
 
 const NO_LOCATION = 0xffffffff
@@ -126,6 +127,12 @@ function compactV6(srcFile, dstFile) {
 	)
 }
 
-mkdirSync(outDir, {recursive: true})
-compactV4(path.join(geoDataDir, 'geoip-city.dat'), path.join(outDir, 'geoip-v4.bin'))
-compactV6(path.join(geoDataDir, 'geoip-city6.dat'), path.join(outDir, 'geoip-v6.bin'))
+export function compactGeoip(outDir = DEFAULT_OUT_DIR) {
+	mkdirSync(outDir, {recursive: true})
+	compactV4(path.join(geoDataDir, 'geoip-city.dat'), path.join(outDir, 'geoip-v4.bin'))
+	compactV6(path.join(geoDataDir, 'geoip-city6.dat'), path.join(outDir, 'geoip-v6.bin'))
+}
+
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+	compactGeoip()
+}

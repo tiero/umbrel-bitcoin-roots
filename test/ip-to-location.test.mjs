@@ -5,6 +5,7 @@ import {tmpdir} from 'node:os'
 import path from 'node:path'
 import {test} from 'node:test'
 import {ipToLatLng, lookupPublicIpLatLng} from '../dist/modules/peers/ip-to-location.js'
+import {compactGeoip} from '../scripts/compact-geoip.mjs'
 
 test('ipToLatLng resolves public IPv4/IPv6 via on-disk binary search with minimal RAM', () => {
 	const googleDns = ['8', '8', '8', '8'].join('.')
@@ -38,7 +39,7 @@ test('ipToLatLng resolves public IPv4/IPv6 via on-disk binary search with minima
 test('compact GeoIP binary tables agree with raw geoip-lite within 0.25 degrees', () => {
 	const tmpDir = mkdtempSync(path.join(tmpdir(), 'geoip-compact-'))
 	try {
-		execFileSync(process.execPath, ['scripts/compact-geoip.mjs', tmpDir], {stdio: 'pipe'})
+		compactGeoip(tmpDir)
 
 		const googleDns = ['8', '8', '8', '8'].join('.')
 		const italyTim = ['87', '0', '1', '1'].join('.')

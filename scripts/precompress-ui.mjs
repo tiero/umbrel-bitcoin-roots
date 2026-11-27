@@ -2,7 +2,7 @@ import {readdirSync, readFileSync, statSync, writeFileSync} from 'node:fs'
 import path from 'node:path'
 import {brotliCompressSync, constants, gzipSync} from 'node:zlib'
 
-const rootDir = path.resolve(process.argv[2] ?? 'apps/ui/dist')
+const rootDir = path.resolve('apps/ui/dist')
 const COMPRESSIBLE_EXTS = new Set(['.js', '.css', '.html', '.svg', '.json', '.geojson', '.ttf', '.webmanifest'])
 const MIN_BYTES = 1024
 

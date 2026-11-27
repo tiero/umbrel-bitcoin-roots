@@ -116,9 +116,9 @@ COPY . .
 # compact GeoIP tables (~98 MB -> ~30 MB) for on-disk binary search
 # bundle UI (vite build) + pre-compress (.br / .gz) static assets (apps/ui/dist)
 RUN tsc -b libs/shared-types libs/settings apps/backend \
- && node scripts/compact-geoip.mjs apps/backend/dist/geoip \
+ && node scripts/compact-geoip.mjs \
  && npm run --workspace apps/ui build \
- && node scripts/precompress-ui.mjs apps/ui/dist
+ && node scripts/precompress-ui.mjs
 
 ########################################
 # runtime stage — final production image
