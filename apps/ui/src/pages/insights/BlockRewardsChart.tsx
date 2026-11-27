@@ -1,4 +1,4 @@
-import {useDeferredValue, useId} from 'react'
+import {useDeferredValue, useId, useMemo} from 'react'
 import {BarChart, Bar, CartesianGrid, XAxis, YAxis} from 'recharts'
 import {formatDistanceStrict} from 'date-fns'
 
@@ -8,8 +8,7 @@ import {ChartCard, DEFAULT_GRID_PROPS, DEFAULT_CHART_MARGIN, makeXAxis, makeYAxi
 import {sliceLast24h, calculateHoursAgo, hoursToMs, satsToBTC} from '@/lib/chartHelpers'
 
 import {useBlocks} from '@/hooks/useBlocks'
-import {syncStage} from '@/lib/sync-progress'
-import {useSyncStatus} from '@/hooks/useSyncStatus'
+import {useSyncStage} from '@/hooks/useSyncStatus'
 
 const SERIES = {
 	subsidy: {label: 'Subsidy', color: 'hsla(29,100%,51%,0.44)'},
@@ -20,24 +19,23 @@ export default function RewardsChart() {
 	// ID for the data series gradient
 	const fillId = useId()
 
-	// Deterine if we're still in IBD (we won't query for data in IBD)
-	const {data: syncStatus} = useSyncStatus()
-	const stage = syncStage(syncStatus)
+	// Determine if we're still in IBD (we won't query for data in IBD)
+	const stage = useSyncStage()
 	const inIBD = stage !== 'synced' // 'pre-headers' | 'headers' | 'IBD'
 
 	// 144 blocks is exactly 24 hours at 1 block per 10 min.
 	// 200 blocks ensures we have 24 hours of data even at worst-case historical block times
 	const {data: raw = [], isLoading} = useBlocks({limit: 200, stage})
 
-	// slice the last 24 hours of data
-	const {slice} = sliceLast24h(raw)
-
-	const chartData = slice.map(({height, subsidySat, feesSat, time}) => ({
-		block: height,
-		hoursAgo: calculateHoursAgo(time),
-		subsidyBTC: satsToBTC(subsidySat),
-		feesBTC: satsToBTC(feesSat),
-	}))
+	const chartData = useMemo(() => {
+		const {slice} = sliceLast24h(raw)
+		return slice.map(({height, subsidySat, feesSat, time}) => ({
+			block: height,
+			hoursAgo: calculateHoursAgo(time),
+			subsidyBTC: satsToBTC(subsidySat),
+			feesBTC: satsToBTC(feesSat),
+		}))
+	}, [raw])
 
 	// Defer the data to avoid blocking the main thread and allow the chart to render immediately and the dock tab to animate smoothly
 	const deferredData = useDeferredValue(chartData)

@@ -1,25 +1,28 @@
-import {useEffect, useState} from 'react'
+import {useEffect, useRef} from 'react'
 
 import {useWebSocketToken} from './useWebSocketToken'
 
-export function useTransactionSocket(): number {
-	const [txCount, setTxCount] = useState(0)
+// Callback-based WebSocket subscription so 30 Hz transaction pings never trigger React re-renders.
+export function useTransactionSocket(onTxPing: (count: number) => void): void {
 	const {data} = useWebSocketToken()
+	const onTxPingRef = useRef(onTxPing)
+	onTxPingRef.current = onTxPing
 
 	useEffect(() => {
 		if (!data?.token) return
 
-		const ws = new WebSocket(`${location.origin.replace(/^http/, 'ws')}/api/ws/transactions?token=${data?.token}`)
+		const ws = new WebSocket(`${location.origin.replace(/^http/, 'ws')}/api/ws/transactions?token=${data.token}`)
 
 		ws.onmessage = (e) => {
+			if (document.hidden) return
 			try {
 				// The backend sends one “txPing” frame every 33 ms, with
 				// `count` = number of transactions in that slice.
 				const {type, count = 1} = JSON.parse(e.data)
-				if (type === 'txPing') setTxCount((t) => t + count)
+				if (type === 'txPing' && count > 0) onTxPingRef.current(count)
 			} catch {
 				// fallback for unexpected payloads
-				setTxCount((t) => t + 1)
+				onTxPingRef.current(1)
 			}
 		}
 
@@ -28,8 +31,10 @@ export function useTransactionSocket(): number {
 		// harmless "WebSocket is closed before the connection is established" error.
 		// This does not happen in production.
 		ws.onerror = console.error
-		return () => ws.close()
+		return () => {
+			ws.onmessage = null
+			ws.onerror = null
+			ws.close()
+		}
 	}, [data?.token])
-
-	return txCount
 }

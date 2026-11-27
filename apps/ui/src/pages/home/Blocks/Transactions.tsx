@@ -1,4 +1,4 @@
-import {useMemo, useRef} from 'react'
+import {useEffect, useMemo, useRef} from 'react'
 import * as THREE from 'three'
 import {useFrame} from '@react-three/fiber'
 import {useFBO} from '@react-three/drei'
@@ -7,6 +7,9 @@ import type {Block} from '#types'
 
 // Tetris grid parameters
 const GRID_SIZE = 20 // Grid is 20x20
+const FBO_SIZE = 256 // Block face renders at ~140px and is heavily blurred; 256px cuts VRAM/fillrate by 16x
+const BLUR_HOVERED = 0.75 // Equivalent to 3.0 at 1024px
+const BLUR_IDLE = 2.5 // Equivalent to 10.0 at 1024px
 
 type TetrisSquare = {
 	x: number
@@ -34,7 +37,7 @@ function packSquares(squares: number[], gridSize: number): TetrisSquare[] {
 	}
 
 	// Loop through squares, largest first
-	for (const size of squares.sort().reverse()) {
+	for (const size of [...squares].sort((a, b) => b - a)) {
 		const position = findPosition(size)
 		if (position) placedSquares.push({...position, size})
 	}
@@ -258,15 +261,16 @@ export function Transactions({
 	const margin = 2 // 2px margin in screen space
 	const marginInWorldSpace = margin * 0.001 // Convert to world space units
 
-	const currentBlur = useRef(6.0)
-	const currentBrightness = useRef(0.5)
+	const currentBlur = useRef(BLUR_IDLE)
+	const currentBrightness = useRef(1.0)
 	const currentGradientInvert = useRef(0.0)
+	const needsRenderRef = useRef(true)
 
-	// Store material references
-	const squareMaterials = useRef<THREE.ShaderMaterial[]>([])
+	// One shared gradient material per block cube (all squares share the same gradientInvert uniform)
+	const squareMaterial = useMemo(() => goldenGradientMaterial.clone(), [])
 
-	// Create render targets for multi-pass blur
-	const renderTarget = useFBO(1024, 1024, {
+	// Create render targets for multi-pass blur (256x256 instead of 1024x1024 = 16x less GPU fillrate & VRAM)
+	const renderTarget = useFBO(FBO_SIZE, FBO_SIZE, {
 		minFilter: THREE.LinearFilter,
 		magFilter: THREE.LinearFilter,
 		format: THREE.RGBAFormat,
@@ -274,7 +278,7 @@ export function Transactions({
 		depthBuffer: false,
 	})
 
-	const renderTargetBlurH = useFBO(1024, 1024, {
+	const renderTargetBlurH = useFBO(FBO_SIZE, FBO_SIZE, {
 		minFilter: THREE.LinearFilter,
 		magFilter: THREE.LinearFilter,
 		format: THREE.RGBAFormat,
@@ -293,45 +297,46 @@ export function Transactions({
 	// Create blur material instances
 	const blurMaterialHInstance = useMemo(() => {
 		const mat = blurMaterialH.clone()
-		mat.uniforms['resolution'].value = new THREE.Vector2(1024, 1024)
-		mat.uniforms['blurSize'].value = 6.0
+		mat.uniforms['resolution'].value = new THREE.Vector2(FBO_SIZE, FBO_SIZE)
+		mat.uniforms['blurSize'].value = BLUR_IDLE
 		return mat
 	}, [])
 
 	const blurMaterialVInstance = useMemo(() => {
 		const mat = blurMaterialV.clone()
-		mat.uniforms['resolution'].value = new THREE.Vector2(1024, 1024)
-		mat.uniforms['blurSize'].value = 6.0
-		mat.uniforms['brightness'].value = 0.5
+		mat.uniforms['resolution'].value = new THREE.Vector2(FBO_SIZE, FBO_SIZE)
+		mat.uniforms['blurSize'].value = BLUR_IDLE
+		mat.uniforms['brightness'].value = 1.0
 		mat.uniforms['opacity'].value = 1.0
 		return mat
 	}, [])
 
-	// Populate render target scene with tetris squares
-	useMemo(() => {
-		// Clear existing children
+	// Populate render target scene with tetris squares and dispose old geometries cleanly
+	useEffect(() => {
+		const geometries: THREE.PlaneGeometry[] = []
 		rtScene.clear()
-		squareMaterials.current = []
 
-		// Add squares to render target scene
-		squares.forEach((square, _index) => {
+		squares.forEach((square) => {
 			const posX = (square.x + square.size / 2) * cellSize - faceSize / 2
 			const posY = faceSize / 2 - (square.y + square.size / 2) * cellSize
 			const squareSize = square.size * cellSize - marginInWorldSpace * 2
 
 			const geometry = new THREE.PlaneGeometry(squareSize, squareSize)
-			const material = goldenGradientMaterial.clone()
-			const mesh = new THREE.Mesh(geometry, material)
+			geometries.push(geometry)
+			const mesh = new THREE.Mesh(geometry, squareMaterial)
 			mesh.position.set(posX, posY, 0)
-
-			// Store material reference
-			squareMaterials.current.push(material)
-
 			rtScene.add(mesh)
 		})
-	}, [squares, cellSize, faceSize, marginInWorldSpace, rtScene])
 
-	// Create blur scenes
+		needsRenderRef.current = true
+
+		return () => {
+			rtScene.clear()
+			geometries.forEach((g) => g.dispose())
+		}
+	}, [squares, cellSize, faceSize, marginInWorldSpace, rtScene, squareMaterial])
+
+	// Create blur scene and dispose geometry/materials on unmount
 	const blurSceneH = useMemo(() => {
 		const scene = new THREE.Scene()
 		const plane = new THREE.Mesh(new THREE.PlaneGeometry(faceSize, faceSize), blurMaterialHInstance)
@@ -339,28 +344,58 @@ export function Transactions({
 		return scene
 	}, [faceSize, blurMaterialHInstance])
 
-	// Render to texture before main render
+	useEffect(() => {
+		return () => {
+			blurSceneH.traverse((obj) => {
+				if (obj instanceof THREE.Mesh) obj.geometry.dispose()
+			})
+		}
+	}, [blurSceneH])
+
+	useEffect(() => {
+		return () => {
+			squareMaterial.dispose()
+			blurMaterialHInstance.dispose()
+			blurMaterialVInstance.dispose()
+		}
+	}, [squareMaterial, blurMaterialHInstance, blurMaterialVInstance])
+
+	// Mark FBO dirty whenever hover state flips
+	useEffect(() => {
+		needsRenderRef.current = true
+	}, [isHovered])
+
+	// Render offscreen FBO passes ONLY when block data changed or hover animation is actively transitioning.
+	// Once converged, idle GPU work drops from 600 full-screen blur passes/sec to 0.
 	useFrame((state, delta) => {
-		// Smooth transitions
-		const targetBlur = isHovered ? 3.0 : 10
-		const targetBrightness = isHovered ? 1 : 1
+		if (!needsRenderRef.current) return
+
+		const targetBlur = isHovered ? BLUR_HOVERED : BLUR_IDLE
+		const targetBrightness = 1
 		const targetGradientInvert = isHovered ? 1.0 : 0.0
 
-		// Ease the values
-		const easeFactor = 1 - Math.pow(0.01, delta) // Smooth easing
+		const easeFactor = 1 - Math.pow(0.01, Math.min(delta, 0.1))
 		currentBlur.current += (targetBlur - currentBlur.current) * easeFactor
 		currentBrightness.current += (targetBrightness - currentBrightness.current) * easeFactor
 		currentGradientInvert.current += (targetGradientInvert - currentGradientInvert.current) * easeFactor
+
+		const converged =
+			Math.abs(targetBlur - currentBlur.current) < 0.005 &&
+			Math.abs(targetBrightness - currentBrightness.current) < 0.005 &&
+			Math.abs(targetGradientInvert - currentGradientInvert.current) < 0.005
+
+		if (converged) {
+			currentBlur.current = targetBlur
+			currentBrightness.current = targetBrightness
+			currentGradientInvert.current = targetGradientInvert
+			needsRenderRef.current = false
+		}
 
 		// Update shader uniforms
 		blurMaterialHInstance.uniforms['blurSize'].value = currentBlur.current
 		blurMaterialVInstance.uniforms['blurSize'].value = currentBlur.current
 		blurMaterialVInstance.uniforms['brightness'].value = currentBrightness.current
-
-		// Update gradient inversion for all square materials
-		squareMaterials.current.forEach((material) => {
-			material.uniforms['gradientInvert'].value = currentGradientInvert.current
-		})
+		squareMaterial.uniforms['gradientInvert'].value = currentGradientInvert.current
 
 		// Store current render target
 		const currentRenderTarget = state.gl.getRenderTarget()

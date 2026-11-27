@@ -5,6 +5,15 @@ const auth = `Basic ${Buffer.from(
 
 let nextId = 0
 
+type CacheEntry = {value: unknown; expiresAt: number}
+const MAX_RPC_CACHE_ENTRIES = 64
+const rpcCache = new Map<string, CacheEntry>()
+const inFlight = new Map<string, Promise<unknown>>()
+
+export function clearRpcCache() {
+	rpcCache.clear()
+}
+
 export const rpcClient = {
 	async command<T = unknown>(method: string, ...params: unknown[]): Promise<T> {
 		const res = await fetch(url, {
@@ -34,5 +43,36 @@ export const rpcClient = {
 		}
 
 		return json.result
+	},
+
+	// Short-TTL cache with in-flight deduplication for frequently polled read-only RPCs
+	// (widgets, dashboard stats, peer counts/locations) to avoid redundant bitcoind calls.
+	cachedCommand<T = unknown>(ttlMs: number, method: string, ...params: unknown[]): Promise<T> {
+		const key = params.length === 0 ? method : `${method}:${JSON.stringify(params)}`
+		const now = Date.now()
+		const hit = rpcCache.get(key)
+		if (hit) {
+			if (hit.expiresAt > now) return Promise.resolve(hit.value as T)
+			rpcCache.delete(key)
+		}
+
+		const pending = inFlight.get(key)
+		if (pending) return pending as Promise<T>
+
+		const req = this.command<T>(method, ...params)
+			.then((value) => {
+				if (rpcCache.size >= MAX_RPC_CACHE_ENTRIES) {
+					const oldest = rpcCache.keys().next().value
+					if (oldest !== undefined) rpcCache.delete(oldest)
+				}
+				rpcCache.set(key, {value, expiresAt: Date.now() + ttlMs})
+				return value
+			})
+			.finally(() => {
+				inFlight.delete(key)
+			})
+
+		inFlight.set(key, req)
+		return req
 	},
 }

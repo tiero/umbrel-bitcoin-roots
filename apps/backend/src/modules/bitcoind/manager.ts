@@ -1,5 +1,6 @@
-import {spawn, ChildProcessWithoutNullStreams, execFileSync} from 'node:child_process'
+import {spawn, ChildProcessByStdio, execFileSync} from 'node:child_process'
 import {EventEmitter} from 'node:events'
+import {renameSync, rmSync, symlinkSync} from 'node:fs'
 import {Readable} from 'node:stream'
 import readline from 'node:readline'
 import fse from 'fs-extra'
@@ -95,7 +96,8 @@ type BitcoindManagerOptions = {
 }
 
 export class BitcoindManager {
-	private child: ChildProcessWithoutNullStreams | null = null
+	private child: ChildProcessByStdio<null, Readable, Readable> | null = null
+	private stoppingPromise: Promise<void> | null = null
 	private readonly bin: string
 	private readonly multiprocessBin: string
 	private readonly datadir: string
@@ -215,8 +217,11 @@ export class BitcoindManager {
 			return
 		}
 
-		// flip the single pointer used by both daemon and CLI
-		execFileSync('ln', ['-sfn', `${BITCOIN_CORE_VERSIONS_DIR}/${version}`, BITCOIN_CORE_CURRENT_SYMLINK])
+		// flip the single pointer used by both daemon and CLI atomically without spawning a shell binary
+		const tmpSymlink = `${BITCOIN_CORE_CURRENT_SYMLINK}.tmp-${process.pid}`
+		rmSync(tmpSymlink, {force: true})
+		symlinkSync(`${BITCOIN_CORE_VERSIONS_DIR}/${version}`, tmpSymlink)
+		renameSync(tmpSymlink, BITCOIN_CORE_CURRENT_SYMLINK)
 
 		const command = this.startCommand(ipcEnabled)
 
@@ -228,22 +233,27 @@ export class BitcoindManager {
 
 		this.startedAt = Date.now()
 
-		this.child = spawn(command.binary, command.args, {
-			stdio: ['pipe', 'pipe', 'pipe'],
-		}) as ChildProcessWithoutNullStreams
+		const child = spawn(command.binary, command.args, {
+			stdio: ['ignore', 'pipe', 'pipe'],
+		}) as ChildProcessByStdio<null, Readable, Readable>
+		this.child = child
 
 		this.lastError = null
-		console.log('[bitcoind-manager] spawned PID', this.child.pid, `(${command.mode})`)
+		console.log('[bitcoind-manager] spawned PID', child.pid, `(${command.mode})`)
 
 		// Emit start event for zmq hashtx subscriber
 		this.events.emit('start')
 
 		// Handle stdout and stderr
-		onLine(this.child.stdout, (line) => this.handleLine(line, false))
-		onLine(this.child.stderr, (line) => this.handleLine(line, true))
+		onLine(child.stdout, (line) => this.handleLine(line, false))
+		onLine(child.stderr, (line) => this.handleLine(line, true))
 
-		this.child.on('exit', (code, sig) => {
+		child.on('exit', (code, sig) => {
 			console.error(`[bitcoind] exited (code=${code}, sig=${sig})`)
+			if (this.child === child) {
+				this.child = null
+				this.startedAt = null
+			}
 
 			// Skip emitting crash info if we expected this exit
 			if (this.expectingExit) return
@@ -256,30 +266,61 @@ export class BitcoindManager {
 			}
 
 			this.events.emit('exit', this.exitInfo)
-			this.child = null
 		})
 
-		// handle spawn errors
-		this.child.on('error', (err) => {
+		// handle spawn errors (Node emits 'error' without 'exit' when spawn fails)
+		child.on('error', (err) => {
 			console.error('[bitcoind-manager] failed to spawn:', err)
 			this.lastError = err
+			if (this.child === child) {
+				this.child = null
+				this.startedAt = null
+			}
 		})
 	}
 
-	// Gracefully stop bitcoind
+	// Gracefully stop bitcoind (deduplicated against concurrent stop/shutdown calls)
 	async stop() {
-		if (!this.child) return
+		if (this.stoppingPromise) return this.stoppingPromise
+		const child = this.child
+		if (!child) return
 
-		// Emit stop event for zmq hashtx subscriber
-		this.events.emit('stop')
+		this.stoppingPromise = (async () => {
+			// Emit stop event for zmq subscribers and caches
+			this.events.emit('stop')
 
-		// we don't want to emit an exit event if we are purposefully stopping bitcoind
-		this.expectingExit = true
-		this.child.kill('SIGTERM')
-		await new Promise((res) => this.child?.once('exit', res))
-		this.expectingExit = false
-		this.child = null
-		this.startedAt = null
+			// we don't want to emit an exit event if we are purposefully stopping bitcoind
+			this.expectingExit = true
+			try {
+				if (child.exitCode === null && child.signalCode === null) {
+					await new Promise<void>((res) => {
+						const finish = () => {
+							clearTimeout(killTimer)
+							res()
+						}
+						child.once('exit', finish)
+						child.once('error', finish)
+						const killTimer = setTimeout(() => {
+							if (child.exitCode === null && child.signalCode === null) {
+								console.error('[bitcoind-manager] SIGTERM timed out, sending SIGKILL')
+								child.kill('SIGKILL')
+							}
+						}, 60_000)
+						killTimer.unref()
+						child.kill('SIGTERM')
+					})
+				}
+			} finally {
+				this.expectingExit = false
+				if (this.child === child) {
+					this.child = null
+					this.startedAt = null
+				}
+				this.stoppingPromise = null
+			}
+		})()
+
+		return this.stoppingPromise
 	}
 
 	// Restart bitcoind

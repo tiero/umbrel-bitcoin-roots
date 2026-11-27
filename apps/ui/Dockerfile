@@ -4,4 +4,5 @@ WORKDIR /repo/apps/ui
 
 # Nothing is copied; the compose bind-mount supplies code and tsconfig.
 # Exposes on 0.0.0.0:5173
+USER node
 CMD ["npm", "run", "dev", "--", "--host"]

@@ -62,6 +62,10 @@ export function useBitcoindExitSocket() {
 			}
 		}
 
-		return () => ws.close()
+		return () => {
+			ws.onmessage = null
+			ws.onerror = null
+			ws.close()
+		}
 	}, [qc, navigate, data?.token])
 }

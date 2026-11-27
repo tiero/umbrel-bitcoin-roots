@@ -2,8 +2,7 @@ import {useEffect} from 'react'
 import {useQueryClient} from '@tanstack/react-query'
 
 import {useWebSocketToken} from './useWebSocketToken'
-import {useSyncStatus} from './useSyncStatus'
-import {syncStage} from '@/lib/sync-progress'
+import {useSyncStage} from './useSyncStatus'
 
 import type {Block} from '#types'
 
@@ -14,8 +13,7 @@ import type {Block} from '#types'
 
 export function useBlockStream() {
 	const qc = useQueryClient()
-	const {data: syncStatus} = useSyncStatus()
-	const stage = syncStage(syncStatus)
+	const stage = useSyncStage()
 	const {data: tokenData} = useWebSocketToken()
 
 	useEffect(() => {
@@ -61,7 +59,13 @@ export function useBlockStream() {
 		return () => {
 			cancelled = true
 			clearTimeout(retryTimer)
-			ws?.close()
+			if (ws) {
+				ws.onopen = null
+				ws.onmessage = null
+				ws.onclose = null
+				ws.onerror = null
+				ws.close()
+			}
 		}
 	}, [stage, qc, tokenData?.token])
 }

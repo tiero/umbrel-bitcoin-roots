@@ -1,6 +1,6 @@
 // @ts-nocheck
 import {Outlet, useLocation} from 'react-router-dom'
-import {useEffect, useRef, useState} from 'react'
+import {Suspense, useEffect, useRef, useState} from 'react'
 import {motion, useScroll, useTransform} from 'framer-motion'
 import {ErrorBoundary} from 'react-error-boundary'
 import ErrorFallback from '../shared/ErrorFallback'
@@ -10,7 +10,6 @@ import Dock from './Dock'
 import Background from './Background'
 
 import {cn} from '@/lib/utils'
-import {usePrefetchInsights} from '@/hooks/usePrefetchInsights'
 import {useBitcoindExitSocket} from '@/hooks/useBitcoindExitSocket'
 import {useBlockStream} from '@/hooks/useBlockStream'
 
@@ -25,10 +24,6 @@ export function Layout() {
 	// Map scroll progress of <main/> to a simple fade opacity (0 -> 1 over first ~3% scroll)
 	const {scrollYProgress} = useScroll({container: mainRef})
 	const fadeOpacity = useTransform(scrollYProgress, [0, 0.03], [0, 1])
-
-	// Prefetch data for the insights page on first mount
-	// Fires after the first paint, so it never delays a page's render or its own fetches
-	usePrefetchInsights()
 
 	// Listen for bitcoind exit events so we can show a toast notification if it crashes / has crashed
 	useBitcoindExitSocket()
@@ -98,7 +93,9 @@ export function Layout() {
 						{/* We wrap the routed page in an ErrorBoundary to catch unexpected render-time errors */}
 						{/* We still show header and dock, but the content is replaced by the ErrorFallback. */}
 						<ErrorBoundary resetKeys={[pathname]} fallbackRender={() => <ErrorFallback />}>
-							<Outlet />
+							<Suspense fallback={null}>
+								<Outlet />
+							</Suspense>
 						</ErrorBoundary>
 					</div>
 				</main>

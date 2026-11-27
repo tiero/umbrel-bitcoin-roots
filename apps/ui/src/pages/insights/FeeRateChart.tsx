@@ -1,4 +1,4 @@
-import {useDeferredValue, useId} from 'react'
+import {useDeferredValue, useId, useMemo} from 'react'
 import {AreaChart, CartesianGrid, XAxis, YAxis, Area} from 'recharts'
 import {formatDistanceStrict} from 'date-fns'
 
@@ -8,8 +8,7 @@ import {ChartCard, DEFAULT_CHART_MARGIN, DEFAULT_GRID_PROPS, makeXAxis, makeYAxi
 import {sliceLast24h, findClosestDataPoint, calculateHoursAgo, hoursToMs} from '@/lib/chartHelpers'
 
 import {useBlocks} from '@/hooks/useBlocks'
-import {useSyncStatus} from '@/hooks/useSyncStatus'
-import {syncStage} from '@/lib/sync-progress'
+import {useSyncStage} from '@/hooks/useSyncStatus'
 
 const SERIES = {
 	p50: {label: '50th-percentile', color: 'hsl(29 100% 51%)'},
@@ -20,25 +19,24 @@ export default function FeeRateChart() {
 	const fillId = useId()
 	const strokeId = useId()
 
-	// Deterine if we're still in IBD (we won't query for data in IBD)
-	const {data: syncStatus} = useSyncStatus()
-	const stage = syncStage(syncStatus)
+	// Determine if we're still in IBD (we won't query for data in IBD)
+	const stage = useSyncStage()
 	const inIBD = stage !== 'synced' // 'pre-headers' | 'headers' | 'IBD'
 
 	// 144 blocks is exactly 24 hours at 1 block per 10 min.
 	// 200 blocks ensures we have 24 hours of data even at worst-case historical block times
 	const {data: raw = [], isLoading} = useBlocks({limit: 200, stage})
 
-	// slice the last 24 hours of data
-	const {slice} = sliceLast24h(raw)
-
-	const chartData = slice.map((p) => ({
-		block: p.height,
-		hoursAgo: calculateHoursAgo(p.time),
-		p10: p.feeRates.p10,
-		p50: p.feeRates.p50,
-		p90: p.feeRates.p90,
-	}))
+	const chartData = useMemo(() => {
+		const {slice} = sliceLast24h(raw)
+		return slice.map((p) => ({
+			block: p.height,
+			hoursAgo: calculateHoursAgo(p.time),
+			p10: p.feeRates.p10,
+			p50: p.feeRates.p50,
+			p90: p.feeRates.p90,
+		}))
+	}, [raw])
 
 	// Defer the data to avoid blocking the main thread and allow the chart to render immediately and the dock tab to animate smoothly
 	const deferredData = useDeferredValue(chartData)

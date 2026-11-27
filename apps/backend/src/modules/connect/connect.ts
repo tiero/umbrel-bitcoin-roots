@@ -26,7 +26,7 @@ export async function getConnectionDetails(): Promise<ConnectionDetails> {
 	const label = 'Umbrel Bitcoin Node'
 	const rpcPort = process.env['RPC_PORT'] ?? '8332'
 	const rpcUser = process.env['RPC_USER'] ?? 'umbrel'
-	const rpcPassword = process.env['RPC_PASS'] ?? 'moneyprintergobrrr'
+	const rpcPassword = process.env['RPC_PASS'] ?? ''
 	const rpcTorHost = await onionHost('RPC')
 	const rpcLocalHost = process.env['DEVICE_DOMAIN_NAME'] ?? '127.0.0.1'
 

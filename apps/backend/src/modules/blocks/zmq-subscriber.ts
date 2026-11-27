@@ -14,25 +14,32 @@ let currentSubscriber: zmq.Subscriber | null = null
 let generation = 0
 
 async function startBlockSubscriber(): Promise<void> {
+	stopBlockSubscriber()
 	const gen = ++generation
 
 	const sub = new zmq.Subscriber()
 	currentSubscriber = sub
-	sub.connect(`tcp://0.0.0.0:${process.env['ZMQ_HASHBLOCK_PORT'] || '28334'}`)
-	sub.subscribe('hashblock')
+	try {
+		sub.connect(`tcp://0.0.0.0:${process.env['ZMQ_HASHBLOCK_PORT'] || '28334'}`)
+		sub.subscribe('hashblock')
 
-	for await (const [, hashBuffer] of sub) {
-		if (gen !== generation) break
-		blockStream.emit('block', hashBuffer.toString('hex'))
+		for await (const [, hashBuffer] of sub) {
+			if (gen !== generation) break
+			blockStream.emit('block', hashBuffer.toString('hex'))
+		}
+	} finally {
+		if (!sub.closed) sub.close()
+		if (currentSubscriber === sub) currentSubscriber = null
 	}
 }
 
-function stopBlockSubscriber() {
+export function stopBlockSubscriber() {
 	generation++
 	if (currentSubscriber) {
 		console.log('[block-subscriber] Stopping block subscriber')
-		currentSubscriber.close()
+		const sub = currentSubscriber
 		currentSubscriber = null
+		if (!sub.closed) sub.close()
 	}
 }
 
@@ -46,4 +53,6 @@ bitcoind.events.on('start', () => {
 	startBlockSubscriber().catch((err) => console.error('ZMQ hashblock subscriber crashed:', err))
 })
 
-startBlockSubscriber().catch((err) => console.error('ZMQ hashblock subscriber crashed:', err))
+if (bitcoind.status().running) {
+	startBlockSubscriber().catch((err) => console.error('ZMQ hashblock subscriber crashed:', err))
+}

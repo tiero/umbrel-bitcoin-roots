@@ -1,5 +1,5 @@
 import type WebSocket from 'ws'
-import {transactionStream} from './zmq-subscriber.js'
+import {acquireTransactionStream, releaseTransactionStream, transactionStream} from './zmq-subscriber.js'
 
 // Throttle strategy: we queue every tx immediately, but emit at most
 // one WebSocket frame every 33 ms (~30 transactions per second). That frame includes
@@ -18,12 +18,13 @@ function broadcastPing(count: number) {
 	}
 }
 
-// queed txs waiting to be sent
+// queued txs waiting to be sent
 let pending = 0
 let lastPingMs = 0
 
 // Increment the queue for every tx; no throttling here.
 transactionStream.on('hashtx', () => {
+	if (clients.size === 0) return
 	pending += 1
 
 	const now = Date.now()
@@ -37,5 +38,15 @@ transactionStream.on('hashtx', () => {
 // WebSocket push for new clients
 export function wsStream(socket: WebSocket) {
 	clients.add(socket)
-	socket.on('close', () => clients.delete(socket))
+	acquireTransactionStream()
+	let released = false
+	const cleanup = () => {
+		if (released) return
+		released = true
+		clients.delete(socket)
+		if (clients.size === 0) pending = 0
+		releaseTransactionStream()
+	}
+	socket.on('close', cleanup)
+	socket.on('error', cleanup)
 }

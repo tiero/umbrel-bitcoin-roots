@@ -6,8 +6,15 @@ import fastifyStatic from '@fastify/static'
 import helmet from '@fastify/helmet'
 
 import {bootBitcoind, bitcoind} from './modules/bitcoind/bitcoind.js'
+import {clearRpcCache} from './modules/bitcoind/rpc-client.js'
+import {stopBlockSubscriber} from './modules/blocks/zmq-subscriber.js'
+import {closeGeoTables} from './modules/peers/ip-to-location.js'
+import {stopTransactionSubscriber} from './modules/transactions/zmq-subscriber.js'
 import {ensureDirs} from './lib/paths.js'
 import routes from './routes.js'
+
+bitcoind.events.on('stop', clearRpcCache)
+bitcoind.events.on('exit', clearRpcCache)
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -21,7 +28,11 @@ bootBitcoind().catch((error) => {
 })
 
 // Create the HTTP server and register the routes
-const app = Fastify({logger: true})
+// Disable per-request access logging in production to avoid writing ~25k widget poll log lines/day.
+const app = Fastify({
+	logger: true,
+	disableRequestLogging: process.env['NODE_ENV'] === 'production',
+})
 
 // CSP
 await app.register(helmet, {
@@ -50,7 +61,7 @@ app.websocketServer.on('connection', (ws) => {
 	ws.on('pong', () => aliveClients.add(ws))
 })
 
-setInterval(() => {
+const heartbeat = setInterval(() => {
 	for (const ws of app.websocketServer.clients) {
 		if (!aliveClients.has(ws)) {
 			ws.terminate()
@@ -60,11 +71,23 @@ setInterval(() => {
 		ws.ping()
 	}
 }, HEARTBEAT_MS)
+heartbeat.unref()
+app.addHook('onClose', async () => {
+	clearInterval(heartbeat)
+})
 
-// serve ui static files from dist/public in production
+// Serve pre-compressed (.br / .gz) UI static files with aggressive caching for hashed Vite assets
 app.register(fastifyStatic, {
 	root: path.join(__dirname, 'public'),
 	wildcard: false, // do not serve index.html for all routes
+	preCompressed: true,
+	setHeaders(reply, filePath) {
+		if (filePath.includes(`${path.sep}assets${path.sep}`)) {
+			reply.header('Cache-Control', 'public, max-age=31536000, immutable')
+		} else {
+			reply.header('Cache-Control', 'no-cache')
+		}
+	},
 })
 
 await app.register(routes)
@@ -84,8 +107,26 @@ app
 // Log unhandled rejections
 process.on('unhandledRejection', (reason) => app.log.error({reason}, 'Unhandled rejection'))
 
-// Graceful shutdown of bitcoind
-// TODO: fix for dev: [tsx] Previous process hasn't exited yet. Force killing...
-const shutdown = () => bitcoind.stop().then(() => process.exit(0))
-process.on('SIGINT', shutdown)
-process.on('SIGTERM', shutdown)
+// Graceful, idempotent shutdown of HTTP/WS server, ZMQ sockets, GeoIP FDs, and bitcoind
+let shuttingDown = false
+const shutdown = async () => {
+	if (shuttingDown) return
+	shuttingDown = true
+	clearInterval(heartbeat)
+	let exitCode = 0
+	try {
+		await app.close().catch((err) => app.log.error({err}, 'Failed to close HTTP server'))
+		stopBlockSubscriber()
+		stopTransactionSubscriber()
+		closeGeoTables()
+		clearRpcCache()
+		await bitcoind.stop()
+	} catch (err) {
+		app.log.error({err}, 'Error during shutdown')
+		exitCode = 1
+	} finally {
+		process.exit(exitCode)
+	}
+}
+process.on('SIGINT', () => void shutdown())
+process.on('SIGTERM', () => void shutdown())
