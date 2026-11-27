@@ -1,4 +1,4 @@
-import {useState} from 'react'
+import {useEffect, useRef, useState} from 'react'
 import QrSvg from '@wojtekmaj/react-qr-svg'
 import copy from 'copy-to-clipboard'
 import {Copy, TriangleAlert, LockKeyhole, X as XIcon} from 'lucide-react'
@@ -28,7 +28,8 @@ import type {ConnectionDetails as ConnectionDetailsType} from '#types'
 import {useConnectionDetails} from '@/hooks/useConnectionDetails'
 
 export default function ConnectionDetails() {
-	const {data} = useConnectionDetails()
+	const [dialogOpen, setDialogOpen] = useState(false)
+	const {data} = useConnectionDetails(dialogOpen)
 
 	const [tab, setTab] = useState<'p2p' | 'rpc' | 'electrum'>('electrum')
 	const [net, setNet] = useState<'tor' | 'local'>('tor')
@@ -39,7 +40,7 @@ export default function ConnectionDetails() {
 	const conn = details as Partial<ConnectionDetailsType['rpc']['tor']>
 
 	return (
-		<Dialog>
+		<Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
 			<DialogTrigger asChild>
 				<Button className='cursor-pointer rounded-full bg-button-gradient backdrop-blur-xl'>
 					<GradientBorderFromTop />
@@ -174,6 +175,13 @@ export default function ConnectionDetails() {
 function Field({label, value}: {label: string; value?: string}) {
 	const blank = !value // true when no data
 	const [open, setOpen] = useState(false)
+	const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+	useEffect(() => {
+		return () => {
+			if (copyTimerRef.current) clearTimeout(copyTimerRef.current)
+		}
+	}, [])
 
 	const handleCopy = () => {
 		// return early if we have nothing to copy
@@ -181,7 +189,11 @@ function Field({label, value}: {label: string; value?: string}) {
 
 		copy(value!)
 		setOpen(true)
-		setTimeout(() => setOpen(false), 600)
+		if (copyTimerRef.current) clearTimeout(copyTimerRef.current)
+		copyTimerRef.current = setTimeout(() => {
+			copyTimerRef.current = null
+			setOpen(false)
+		}, 600)
 	}
 
 	return (

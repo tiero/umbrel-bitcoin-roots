@@ -7,13 +7,23 @@
 // continuous ZMQ wakeups and V8 buffer allocations when no browser tab is open.
 
 import {EventEmitter} from 'node:events'
+import {setTimeout as delay} from 'node:timers/promises'
 import zmq from 'zeromq'
 
 import {rpcClient} from '../bitcoind/rpc-client.js'
 import {bitcoind} from '../bitcoind/bitcoind.js'
 
-async function waitSynced(isCurrent: () => boolean, pollMs = 5_000): Promise<boolean> {
-	while (isCurrent()) {
+async function sleepAbortable(ms: number, signal: AbortSignal): Promise<boolean> {
+	try {
+		await delay(ms, undefined, {signal, ref: false})
+		return true
+	} catch {
+		return false
+	}
+}
+
+async function waitSynced(isCurrent: () => boolean, signal: AbortSignal, pollMs = 5_000): Promise<boolean> {
+	while (isCurrent() && !signal.aborted) {
 		try {
 			const {initialblockdownload, blocks, headers} = await rpcClient.command<{
 				initialblockdownload: boolean
@@ -24,20 +34,20 @@ async function waitSynced(isCurrent: () => boolean, pollMs = 5_000): Promise<boo
 		} catch {
 			// rpc not ready yet or bitcoind is down
 		}
-		await new Promise((r) => setTimeout(r, pollMs))
+		if (!(await sleepAbortable(pollMs, signal))) return false
 	}
 	return false
 }
 
-async function waitMempoolLoaded(isCurrent: () => boolean, pollMs = 2_000): Promise<boolean> {
-	while (isCurrent()) {
+async function waitMempoolLoaded(isCurrent: () => boolean, signal: AbortSignal, pollMs = 2_000): Promise<boolean> {
+	while (isCurrent() && !signal.aborted) {
 		try {
 			const {loaded} = await rpcClient.command<{loaded: boolean}>('getmempoolinfo')
 			if (loaded) return true
 		} catch {
 			// rpc not ready yet or bitcoind is down
 		}
-		await new Promise((r) => setTimeout(r, pollMs))
+		if (!(await sleepAbortable(pollMs, signal))) return false
 	}
 	return false
 }
@@ -45,35 +55,48 @@ async function waitMempoolLoaded(isCurrent: () => boolean, pollMs = 2_000): Prom
 export const transactionStream = new EventEmitter()
 
 let currentSubscriber: zmq.Subscriber | null = null
+let currentAbort: AbortController | null = null
 let activeConsumers = 0
 let generation = 0
 
 async function startTransactionSubscriber(): Promise<void> {
+	stopTransactionSubscriber()
 	const gen = ++generation
-	const isCurrent = () => gen === generation && activeConsumers > 0
+	const ac = new AbortController()
+	currentAbort = ac
+	const isCurrent = () => gen === generation && activeConsumers > 0 && !ac.signal.aborted
 
-	if (!(await waitSynced(isCurrent))) return
-	if (!(await waitMempoolLoaded(isCurrent))) return
+	if (!(await waitSynced(isCurrent, ac.signal))) return
+	if (!(await waitMempoolLoaded(isCurrent, ac.signal))) return
 	if (!isCurrent()) return
 
 	const sub = new zmq.Subscriber()
 	currentSubscriber = sub
-	sub.connect(`tcp://0.0.0.0:${process.env['ZMQ_HASHTX_PORT'] || '28336'}`)
-	sub.subscribe('hashtx')
+	try {
+		sub.connect(`tcp://0.0.0.0:${process.env['ZMQ_HASHTX_PORT'] || '28336'}`)
+		sub.subscribe('hashtx')
 
-	for await (const msg of sub) {
-		if (!isCurrent()) break
-		void msg
-		transactionStream.emit('hashtx')
+		for await (const msg of sub) {
+			if (!isCurrent()) break
+			void msg
+			transactionStream.emit('hashtx')
+		}
+	} finally {
+		if (!sub.closed) sub.close()
+		if (currentSubscriber === sub) currentSubscriber = null
+		if (currentAbort === ac) currentAbort = null
 	}
 }
 
-function stopTransactionSubscriber() {
+export function stopTransactionSubscriber() {
 	generation++
+	currentAbort?.abort()
+	currentAbort = null
 	if (currentSubscriber) {
 		console.log('[tx-subscriber] Stopping transaction subscriber')
-		currentSubscriber.close()
+		const sub = currentSubscriber
 		currentSubscriber = null
+		if (!sub.closed) sub.close()
 	}
 }
 

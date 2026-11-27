@@ -37,6 +37,9 @@ import {blockStream} from './zmq-subscriber.js'
 import type {Block, RawBlock, RawTransaction} from '#types'
 
 const rpcQueue = new PQueue({concurrency: 10})
+// Heavy `getblock <hash> 2` calls decode 15-35 MB JSON (~50-120 MB V8 heap each); serialize them
+// so concurrent home-page requests cannot spike past the 192 MB Node heap cap.
+const fullBlockQueue = new PQueue({concurrency: 1})
 
 // --- Pure helpers ---
 
@@ -124,9 +127,7 @@ function statsToBlock(stats: BlockStats): Block {
 
 // Full: from getblock verbosity 2 (includes transactionGrid for cube faces)
 function rawToBlock(raw: RawBlock): Block {
-	const feesSat = Math.round(
-		raw.tx.reduce((sum: number, tx) => sum + (tx.fee ?? 0), 0) * 1e8,
-	)
+	const feesSat = Math.round(raw.tx.reduce((sum: number, tx) => sum + (tx.fee ?? 0), 0) * 1e8)
 
 	return {
 		hash: raw.hash,
@@ -147,44 +148,82 @@ function rawToBlock(raw: RawBlock): Block {
 export const MAX_BLOCKS_LIMIT = 200
 const CACHE_DEPTH = MAX_BLOCKS_LIMIT
 const blockCache = new Map<number, Block>()
+// Tracks heights fetched via verbosity-2 `getblock` so empty/coinbase-only blocks
+// (whose transactionGrid is legitimately []) still hit cache instead of re-fetching forever.
+const fullBlockHeights = new Set<number>()
+const inFlightBlocks = new Map<string, Promise<Block>>()
 
 function evictOldEntries() {
 	if (blockCache.size <= CACHE_DEPTH) return
 	const sortedKeys = Array.from(blockCache.keys()).sort((a, b) => a - b)
 	const keysToDelete = sortedKeys.slice(0, blockCache.size - CACHE_DEPTH)
-	keysToDelete.forEach((key) => blockCache.delete(key))
+	keysToDelete.forEach((key) => {
+		blockCache.delete(key)
+		fullBlockHeights.delete(key)
+	})
 }
 
 // Lightweight fetch via getblockstats — used for bulk priming.
 // Does NOT overwrite a full block (with transactionGrid) if one is already cached.
-async function getBlockLight(height: number): Promise<Block> {
+function getBlockLight(height: number): Promise<Block> {
 	const cached = blockCache.get(height)
-	if (cached) return cached
+	if (cached) return Promise.resolve(cached)
 
-	const stats = await rpcClient.command<BlockStats>('getblockstats', height)
-	const block = statsToBlock(stats)
+	const key = `light:${height}`
+	const existing = inFlightBlocks.get(key)
+	if (existing) return existing
 
-	blockCache.set(height, block)
-	evictOldEntries()
+	const req = rpcQueue
+		.add(async () => {
+			const again = blockCache.get(height)
+			if (again) return again
+			const stats = await rpcClient.command<BlockStats>('getblockstats', height)
+			const block = statsToBlock(stats)
+			if (!fullBlockHeights.has(height)) {
+				blockCache.set(height, block)
+				evictOldEntries()
+			}
+			return blockCache.get(height) ?? block
+		})
+		.finally(() => {
+			inFlightBlocks.delete(key)
+		}) as Promise<Block>
 
-	return block
+	inFlightBlocks.set(key, req)
+	return req
 }
 
 // Full fetch via getblock verbosity 2 — used for ZMQ events and home page blocks.
 // Always overwrites the cache entry (upgrades light → full).
-async function getBlockFull(height: number): Promise<Block> {
+function getBlockFull(height: number): Promise<Block> {
 	const cached = blockCache.get(height)
-	if (cached && cached.transactionGrid.length > 0) return cached
+	if (cached && fullBlockHeights.has(height)) return Promise.resolve(cached)
 
-	console.log(`[blocks] fetching full block ${height}`)
-	const blockHash = await rpcClient.command<string>('getblockhash', height)
-	const raw = await rpcClient.command<RawBlock>('getblock', blockHash, 2)
-	const block = rawToBlock(raw)
+	const key = `full:${height}`
+	const existing = inFlightBlocks.get(key)
+	if (existing) return existing
 
-	blockCache.set(height, block)
-	evictOldEntries()
+	const req = fullBlockQueue
+		.add(async () => {
+			const again = blockCache.get(height)
+			if (again && fullBlockHeights.has(height)) return again
+			console.log(`[blocks] fetching full block ${height}`)
+			const blockHash = await rpcClient.command<string>('getblockhash', height)
+			const raw = await rpcClient.command<RawBlock>('getblock', blockHash, 2)
+			const block = rawToBlock(raw)
 
-	return block
+			blockCache.set(height, block)
+			fullBlockHeights.add(height)
+			evictOldEntries()
+
+			return block
+		})
+		.finally(() => {
+			inFlightBlocks.delete(key)
+		}) as Promise<Block>
+
+	inFlightBlocks.set(key, req)
+	return req
 }
 
 // --- Frontend-facing reads ---
@@ -197,11 +236,7 @@ export async function list(limit = 200): Promise<Block[]> {
 	// Home page requests (limit ≤ 5) use full fetch for transactionGrid.
 	const fetchFn = limit <= 5 ? getBlockFull : getBlockLight
 
-	const blocks = (await Promise.all(
-		Array.from({length: count}, (_, i) =>
-			rpcQueue.add(() => fetchFn(tipHeight - i)),
-		),
-	)) as Block[]
+	const blocks = await Promise.all(Array.from({length: count}, (_, i) => fetchFn(tipHeight - i)))
 
 	// Return in chronological order (oldest first)
 	return blocks.reverse()
@@ -230,6 +265,7 @@ blockStream.on('block', async (hash: string) => {
 			? rawToBlock(await rpcClient.command<RawBlock>('getblock', hash, 2))
 			: statsToBlock(await rpcClient.command<BlockStats>('getblockstats', hash))
 		blockCache.set(block.height, block)
+		if (hasListeners) fullBlockHeights.add(block.height)
 		evictOldEntries()
 
 		if (hasListeners) {
@@ -261,33 +297,50 @@ export function wsStream(socket: WebSocket) {
 // Larger ranges (e.g. 200 blocks for Insights charts) and full transactionGrids are
 // populated on demand when the user opens the UI, keeping idle RAM minimal.
 
-let priming = false
+let primeGen = 0
+let primeAbort: AbortController | null = null
 
 async function prime() {
-	if (priming) return
-	priming = true
+	const gen = ++primeGen
+	primeAbort?.abort()
+	const ac = new AbortController()
+	primeAbort = ac
 	try {
-		await setTimeout(5000) // wait for bitcoind to be ready
+		await setTimeout(5000, undefined, {signal: ac.signal, ref: false}) // wait for bitcoind to be ready
+		if (gen !== primeGen) return
 		const tipHeight = await rpcClient.command<number>('getblockcount')
+		if (gen !== primeGen) return
 		const count = Math.min(5, tipHeight + 1)
-		await Promise.all(Array.from({length: count}, (_, i) => rpcQueue.add(() => getBlockLight(tipHeight - i))))
+		await Promise.all(Array.from({length: count}, (_, i) => getBlockLight(tipHeight - i)))
+	} catch (err) {
+		if ((err as {name?: string})?.name !== 'AbortError') throw err
 	} finally {
-		priming = false
+		if (primeAbort === ac) primeAbort = null
 	}
 }
 
 function reset() {
+	primeGen++
+	primeAbort?.abort()
+	primeAbort = null
+	rpcQueue.clear()
+	fullBlockQueue.clear()
+	inFlightBlocks.clear()
 	blockCache.clear()
+	fullBlockHeights.clear()
 	processing = false
-	priming = false
 }
 
 // --- Bitcoind lifecycle ---
 // When bitcoind restarts (e.g. user switches network), the in-memory cache
-// would serve stale blocks from the old chain. Clear it on stop, re-prime on start.
+// would serve stale blocks from the old chain. Clear it on stop/exit, re-prime on start.
 
 bitcoind.events.on('stop', () => {
 	console.log('[blocks] bitcoind stopped, clearing cache')
+	reset()
+})
+
+bitcoind.events.on('exit', () => {
 	reset()
 })
 
@@ -296,4 +349,6 @@ bitcoind.events.on('start', () => {
 	prime().catch((err) => console.error('[blocks] prime error:', err))
 })
 
-prime().catch((err) => console.error('[blocks] init error:', err))
+if (bitcoind.status().running) {
+	prime().catch((err) => console.error('[blocks] init error:', err))
+}

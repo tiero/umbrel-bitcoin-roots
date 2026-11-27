@@ -38,6 +38,12 @@ export function AnimatedCube({
 	const [isHovered, setIsHovered] = useState(false)
 	const liquidMaterial = useMemo(() => createLiquidMaterial(), [])
 
+	useEffect(() => {
+		return () => {
+			liquidMaterial.dispose()
+		}
+	}, [liquidMaterial])
+
 	const {clock} = useThree()
 
 	// Animation values
@@ -391,9 +397,7 @@ export function AnimatedCube({
 			})
 		}
 
-		// Update liquid shader
-		liquidMaterial.uniforms['uTime'].value = now
-
+		// Update liquid shader (only advance uTime when visible)
 		if (animationState.phase === 'entering') {
 			const subPhase = enteringSubPhaseRef.current
 			if (subPhase === 'spinning-in' || subPhase === 'validating') {
@@ -417,6 +421,9 @@ export function AnimatedCube({
 		} else {
 			liquidMaterial.uniforms['uOpacity'].value = 0
 			liquidMaterial.uniforms['uColorProgress'].value = 0
+		}
+		if (liquidMaterial.uniforms['uOpacity'].value > 0) {
+			liquidMaterial.uniforms['uTime'].value = now
 		}
 	})
 

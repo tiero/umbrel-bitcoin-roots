@@ -1,4 +1,4 @@
-import {useState, useEffect, useMemo, useRef, useCallback} from 'react'
+import {memo, useState, useEffect, useMemo, useRef, useCallback} from 'react'
 import Globe from 'react-globe.gl'
 import * as THREE from 'three'
 import {latLngToCell, cellToLatLng} from 'h3-js'
@@ -46,6 +46,9 @@ const MAX_SPHERES_PER_UPDATE = 20 // Max spheres to spawn per transaction count 
 const MAX_CONCURRENT_SPHERES = 75 // Max total spheres animating simultaneously
 const RENDERER_CONFIG = {antialias: true, alpha: true, powerPreference: 'default' as const}
 
+// Cache the parsed landmass GeoJSON across Home page mounts so navigating back does not re-fetch or re-parse it
+let cachedCountries: {features: any[]} | null = null
+
 // If WebGL is not supported, show a static image of the globe
 // This will happen on Tor Browser and some older browsers
 function ImageFallback({width = 650, height = 650}: {width?: number; height?: number}) {
@@ -56,16 +59,16 @@ function ImageFallback({width = 650, height = 650}: {width?: number; height?: nu
 	)
 }
 
-export default function LiveGlobe({width = 650, height = 650}: {width?: number; height?: number}) {
+export default memo(function LiveGlobe({width = 650, height = 650}: {width?: number; height?: number}) {
 	return (
 		<ErrorBoundary fallbackRender={() => <ImageFallback width={width} height={height} />}>
 			<LiveGlobeWebGL width={width} height={height} />
 		</ErrorBoundary>
 	)
-}
+})
 
 function LiveGlobeWebGL({width = 650, height = 650}: {width?: number; height?: number}) {
-	const [countries, setCountries] = useState({features: []})
+	const [countries, setCountries] = useState<{features: any[]}>(() => cachedCountries ?? {features: []})
 	const [isReady, setIsReady] = useState(false)
 	const [shouldInitialize, setShouldInitialize] = useState(false)
 	const globeRef = useRef<any>(null)
@@ -78,9 +81,18 @@ function LiveGlobeWebGL({width = 650, height = 650}: {width?: number; height?: n
 		return () => clearTimeout(timer)
 	}, [])
 
-	// Reusable geometries and materials for better performance
-	const sphereGeometryRef = useRef<THREE.SphereGeometry>(new THREE.SphereGeometry(TX_SPHERE_RADIUS, 8, 6))
-	const sphereMaterialRef = useRef<THREE.MeshBasicMaterial>(new THREE.MeshBasicMaterial({color: TX_SPHERE_COLOR}))
+	// Reusable geometries and materials allocated once per mount (not on every render) and disposed on unmount
+	const sphereGeometry = useMemo(() => new THREE.SphereGeometry(TX_SPHERE_RADIUS, 8, 6), [])
+	const sphereMaterial = useMemo(() => new THREE.MeshBasicMaterial({color: TX_SPHERE_COLOR}), [])
+	const arcMaterial = useMemo(
+		() =>
+			new THREE.LineBasicMaterial({
+				color: ARC_COLOR,
+				transparent: true,
+				opacity: ARC_OPACITY,
+			}),
+		[],
+	)
 	const animationIdRef = useRef<number | null>(null)
 	const arcsDataRef = useRef<Array<{startLat: number; startLng: number; endLat: number; endLng: number}>>([])
 	const userLocationRef = useRef<[number, number] | undefined>(undefined)
@@ -171,29 +183,29 @@ function LiveGlobeWebGL({width = 650, height = 650}: {width?: number; height?: n
 		return new THREE.Vector3(r * cosPhi * Math.sin(lambda), r * Math.sin(phi), r * cosPhi * Math.cos(lambda))
 	}, [])
 
-	// Spherical interpolation along arc path
-	const slerpOnSphere = useCallback((start: THREE.Vector3, end: THREE.Vector3, t: number) => {
-		const angle = start.angleTo(end)
-		if (angle === 0) return start.clone()
+	// Spherical interpolation along arc path (writes into `out` in-place to avoid per-frame Vector3 allocations)
+	const slerpOnSphere = useCallback(
+		(start: THREE.Vector3, end: THREE.Vector3, t: number, out: THREE.Vector3 = new THREE.Vector3()) => {
+			const angle = start.angleTo(end)
+			if (angle === 0) return out.copy(start)
 
-		const sinAngle = Math.sin(angle)
-		const ratioA = Math.sin((1 - t) * angle) / sinAngle
-		const ratioB = Math.sin(t * angle) / sinAngle
+			const sinAngle = Math.sin(angle)
+			const ratioA = Math.sin((1 - t) * angle) / sinAngle
+			const ratioB = Math.sin(t * angle) / sinAngle
 
-		const result = new THREE.Vector3()
-		result.addScaledVector(start, ratioA)
-		result.addScaledVector(end, ratioB)
+			out.set(0, 0, 0)
+			out.addScaledVector(start, ratioA)
+			out.addScaledVector(end, ratioB)
 
-		const RADIUS = 100
-		const altitude = ARC_BASE_ALTITUDE
-		const r = RADIUS * (1 + altitude)
-		result.normalize().multiplyScalar(r)
+			const RADIUS = 100
+			const r = RADIUS * (1 + ARC_BASE_ALTITUDE)
+			const arcHeight = Math.sin(t * Math.PI) * angle * RADIUS * ARC_HEIGHT_MULTIPLIER
+			out.normalize().multiplyScalar(r + arcHeight)
 
-		const arcHeight = Math.sin(t * Math.PI) * angle * RADIUS * ARC_HEIGHT_MULTIPLIER
-		result.normalize().multiplyScalar(r + arcHeight)
-
-		return result
-	}, [])
+			return out
+		},
+		[],
+	)
 
 	const pointColor = useCallback((dot: any) => (dot.isUser ? USER_DOT_COLOR : PEER_DOT_COLOR), [])
 	const pointRadius = useCallback((dot: any) => {
@@ -208,12 +220,20 @@ function LiveGlobeWebGL({width = 650, height = 650}: {width?: number; height?: n
 
 	// USEEFFECTS TO LOAD DATA AND ANIMATE THE GLOBE
 
-	// load the landmass map
+	// load the landmass map (cached across mounts, aborted on unmount)
 	useEffect(() => {
-		fetch('/datasets/ne_110m_admin_0_countries.geojson?v=2')
+		if (cachedCountries) return
+		const ac = new AbortController()
+		fetch('/datasets/ne_110m_admin_0_countries.geojson?v=2', {signal: ac.signal})
 			.then((res) => res.json())
-			.then(setCountries)
-			.catch((err) => console.error('Failed to load landmass dataset:', err))
+			.then((json) => {
+				cachedCountries = json
+				setCountries(json)
+			})
+			.catch((err) => {
+				if (err?.name !== 'AbortError') console.error('Failed to load landmass dataset:', err)
+			})
+		return () => ac.abort()
 	}, [])
 
 	// Enable auto-rotation and disable zooming
@@ -248,48 +268,46 @@ function LiveGlobeWebGL({width = 650, height = 650}: {width?: number; height?: n
 		globeRef.current.pointOfView({lat: data.userLocation[0], lng: data.userLocation[1]}, 800)
 	}, [data?.userLocation, shouldInitialize])
 
-	// Add custom arcs that match sphere paths
+	// Add custom arcs that match sphere paths (using one shared material, disposed on update and unmount)
 	useEffect(() => {
 		if (!globeRef.current) return
 
 		const scene = globeRef.current.scene()
+		const addedArcs: THREE.Line[] = []
 
-		// Remove existing custom arcs
+		// Remove any existing custom arcs
 		const existingArcs = scene.children.filter((child: any) => child.userData?.[ARC_IDENTIFIER])
 		existingArcs.forEach((arc: any) => {
 			scene.remove(arc)
 			arc.geometry.dispose()
-			arc.material.dispose()
 		})
 
-		// If there are no arcs to render, exit after cleanup
-		if (!arcsData.length) return
+		if (arcsData.length) {
+			arcsData.forEach((arc) => {
+				const startVec = latLngToVector3(arc.startLat, arc.startLng)
+				const endVec = latLngToVector3(arc.endLat, arc.endLng)
 
-		// Create arcs using same spherical interpolation as spheres
-		arcsData.forEach((arc) => {
-			const startVec = latLngToVector3(arc.startLat, arc.startLng)
-			const endVec = latLngToVector3(arc.endLat, arc.endLng)
+				const arcPoints: THREE.Vector3[] = []
+				for (let i = 0; i <= ARC_CURVE_RESOLUTION; i++) {
+					arcPoints.push(slerpOnSphere(startVec, endVec, i / ARC_CURVE_RESOLUTION))
+				}
 
-			// Create arc points using same slerpOnSphere function
-			const arcPoints: THREE.Vector3[] = []
-			for (let i = 0; i <= ARC_CURVE_RESOLUTION; i++) {
-				arcPoints.push(slerpOnSphere(startVec, endVec, i / ARC_CURVE_RESOLUTION))
-			}
+				const lineGeometry = new THREE.BufferGeometry().setFromPoints(arcPoints)
+				const line = new THREE.Line(lineGeometry, arcMaterial)
+				line.userData = {[ARC_IDENTIFIER]: true}
 
-			// Create line geometry
-			const lineGeometry = new THREE.BufferGeometry().setFromPoints(arcPoints)
-			const lineMaterial = new THREE.LineBasicMaterial({
-				color: ARC_COLOR,
-				transparent: true,
-				opacity: ARC_OPACITY,
+				scene.add(line)
+				addedArcs.push(line)
 			})
-			const line = new THREE.Line(lineGeometry, lineMaterial)
-			line.userData = {[ARC_IDENTIFIER]: true}
+		}
 
-			scene.add(line)
-		})
-		// We make sure to re-run this effect when the globe is ready since we defer initialization (`shouldInitialize`)
-	}, [arcsData, latLngToVector3, slerpOnSphere, shouldInitialize])
+		return () => {
+			for (const line of addedArcs) {
+				scene.remove(line)
+				line.geometry.dispose()
+			}
+		}
+	}, [arcsData, arcMaterial, latLngToVector3, slerpOnSphere, shouldInitialize])
 
 	// Keep latest arcs in a ref so WebSocket tx pings spawn spheres with zero React re-renders
 	useEffect(() => {
@@ -304,21 +322,22 @@ function LiveGlobeWebGL({width = 650, height = 650}: {width?: number; height?: n
 
 		const now = Date.now()
 		const scene = globeRef.current.scene()
+		const spheres = animatedSpheresRef.current
 
-		animatedSpheresRef.current = animatedSpheresRef.current.filter(
-			({sphere, startVec, endVec, startTime, duration}) => {
-				const elapsed = now - startTime
-				if (elapsed < duration) {
-					const position = slerpOnSphere(startVec, endVec, elapsed / duration)
-					sphere.position.copy(position)
-					return true
-				}
-				scene.remove(sphere)
-				return false
-			},
-		)
+		// Compact active spheres in-place (zero per-frame array or Vector3 allocations)
+		for (let i = spheres.length - 1; i >= 0; i--) {
+			const item = spheres[i]
+			const elapsed = now - item.startTime
+			if (elapsed < item.duration) {
+				slerpOnSphere(item.startVec, item.endVec, elapsed / item.duration, item.sphere.position)
+			} else {
+				scene.remove(item.sphere)
+				spheres[i] = spheres[spheres.length - 1]
+				spheres.pop()
+			}
+		}
 
-		if (animatedSpheresRef.current.length > 0 && globeRef.current) {
+		if (spheres.length > 0 && globeRef.current) {
 			animationIdRef.current = requestAnimationFrame(runSphereAnimation)
 		} else {
 			animationIdRef.current = null
@@ -340,7 +359,7 @@ function LiveGlobeWebGL({width = 650, height = 650}: {width?: number; height?: n
 			for (let i = 0; i < spheresToCreate; i++) {
 				const randomArc = arcs[arcCursorRef.current % arcs.length]
 				arcCursorRef.current = (arcCursorRef.current + 1) % arcs.length
-				const sphere = new THREE.Mesh(sphereGeometryRef.current, sphereMaterialRef.current)
+				const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial)
 
 				const startVec = latLngToVector3(randomArc.startLat, randomArc.startLng)
 				const endVec = latLngToVector3(randomArc.endLat, randomArc.endLng)
@@ -368,32 +387,36 @@ function LiveGlobeWebGL({width = 650, height = 650}: {width?: number; height?: n
 				animationIdRef.current = requestAnimationFrame(runSphereAnimation)
 			}
 		},
-		[latLngToVector3, runSphereAnimation],
+		[latLngToVector3, runSphereAnimation, sphereGeometry, sphereMaterial],
 	)
 
 	useTransactionSocket(handleTxPing)
 
-	// Pause Globe WebGL animation and drop in-flight tx spheres while the browser tab is hidden
+	// Pause Globe WebGL animation in background tabs & fully tear down WebGL/OrbitControls/renderer on unmount.
+	// Note: globe.gl's built-in _destructor() does not dispose OrbitControls (leaks document keydown listener),
+	// EffectComposer (2 render targets), WebGLRenderer (WebGL context), or window.scene.
 	useEffect(() => {
+		const globe = globeRef.current
+		if (!globe) return
+
 		const clearSpheres = () => {
 			if (animationIdRef.current !== null) {
 				cancelAnimationFrame(animationIdRef.current)
 				animationIdRef.current = null
 			}
-			if (globeRef.current && animatedSpheresRef.current.length > 0) {
-				const scene = globeRef.current.scene()
+			const scene = globe.scene?.()
+			if (scene && animatedSpheresRef.current.length > 0) {
 				for (const item of animatedSpheresRef.current) scene.remove(item.sphere)
 			}
 			animatedSpheresRef.current = []
 		}
 
 		const onVisibilityChange = () => {
-			if (!globeRef.current) return
 			if (document.hidden) {
 				clearSpheres()
-				globeRef.current.pauseAnimation?.()
+				globe.pauseAnimation?.()
 			} else {
-				globeRef.current.resumeAnimation?.()
+				globe.resumeAnimation?.()
 			}
 		}
 
@@ -401,18 +424,34 @@ function LiveGlobeWebGL({width = 650, height = 650}: {width?: number; height?: n
 		return () => {
 			document.removeEventListener('visibilitychange', onVisibilityChange)
 			clearSpheres()
+			globe.pauseAnimation?.()
+			const scene = globe.scene?.()
+			if (scene) {
+				const remainingArcs = scene.children.filter((child: any) => child.userData?.[ARC_IDENTIFIER])
+				for (const arc of remainingArcs) {
+					scene.remove(arc)
+					arc.geometry?.dispose?.()
+				}
+				if ((window as any).scene === scene) {
+					;(window as any).scene = undefined
+				}
+			}
+			globe.controls?.()?.dispose?.()
+			globe.postProcessingComposer?.()?.dispose?.()
+			const renderer = globe.renderer?.()
+			renderer?.dispose?.()
+			renderer?.forceContextLoss?.()
 		}
-	}, [])
+	}, [shouldInitialize])
 
-	// Dispose shared sphere geometry & material on unmount
+	// Dispose shared sphere geometry & materials on unmount
 	useEffect(() => {
-		const geometry = sphereGeometryRef.current
-		const material = sphereMaterialRef.current
 		return () => {
-			geometry.dispose()
-			material.dispose()
+			sphereGeometry.dispose()
+			sphereMaterial.dispose()
+			arcMaterial.dispose()
 		}
-	}, [])
+	}, [sphereGeometry, sphereMaterial, arcMaterial])
 
 	// Fade in effect after initial render
 	useEffect(() => {

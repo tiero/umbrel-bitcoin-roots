@@ -1,5 +1,5 @@
 import {createHash} from 'node:crypto'
-import {existsSync, fstatSync, openSync, readSync} from 'node:fs'
+import {closeSync, existsSync, fstatSync, openSync, readSync} from 'node:fs'
 import {createRequire} from 'node:module'
 import net from 'node:net'
 import path from 'node:path'
@@ -47,30 +47,54 @@ function resolveLegacyGeoDataDir(): string | null {
 let v4Table: GeoTable | null | undefined
 let v6Table: GeoTable | null | undefined
 
+function openGeoFile(filePath: string, recSize: number, compact: boolean): GeoTable | null {
+	let fd: number | undefined
+	try {
+		fd = openSync(filePath, 'r')
+		const totalRecords = Math.floor(fstatSync(fd).size / recSize)
+		if (totalRecords > 0) return {fd, totalRecords, compact}
+		closeSync(fd)
+	} catch {
+		if (fd !== undefined) {
+			try {
+				closeSync(fd)
+			} catch {}
+		}
+	}
+	return null
+}
+
 function openGeoTable(version: 4 | 6): GeoTable | null {
 	const compactDir = resolveCompactDir()
 	if (compactDir) {
 		const filePath = path.join(compactDir, version === 4 ? 'geoip-v4.bin' : 'geoip-v6.bin')
-		const recSize = version === 4 ? COMPACT_SIZE_V4 : COMPACT_SIZE_V6
-		try {
-			const fd = openSync(filePath, 'r')
-			const totalRecords = Math.floor(fstatSync(fd).size / recSize)
-			if (totalRecords > 0) return {fd, totalRecords, compact: true}
-		} catch {}
+		const table = openGeoFile(filePath, version === 4 ? COMPACT_SIZE_V4 : COMPACT_SIZE_V6, true)
+		if (table) return table
 	}
 
 	const legacyDir = resolveLegacyGeoDataDir()
 	if (legacyDir) {
 		const filePath = path.join(legacyDir, version === 4 ? 'geoip-city.dat' : 'geoip-city6.dat')
-		const recSize = version === 4 ? RECORD_SIZE_V4 : RECORD_SIZE_V6
-		try {
-			const fd = openSync(filePath, 'r')
-			const totalRecords = Math.floor(fstatSync(fd).size / recSize)
-			if (totalRecords > 0) return {fd, totalRecords, compact: false}
-		} catch {}
+		const table = openGeoFile(filePath, version === 4 ? RECORD_SIZE_V4 : RECORD_SIZE_V6, false)
+		if (table) return table
 	}
 
 	return null
+}
+
+export function closeGeoTables() {
+	if (v4Table) {
+		try {
+			closeSync(v4Table.fd)
+		} catch {}
+		v4Table = undefined
+	}
+	if (v6Table) {
+		try {
+			closeSync(v6Table.fd)
+		} catch {}
+		v6Table = undefined
+	}
 }
 
 function getGeoTable(version: 4 | 6): GeoTable | null {

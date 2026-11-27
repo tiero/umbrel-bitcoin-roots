@@ -61,9 +61,13 @@ export const columns: ColumnDef<PeerRow>[] = [
 			const {subversion, address} = row.original.info
 			return (
 				<div className='flex flex-col'>
-					{/* Set a max width and scrollable container for these because they can be very long (e.g., onion addresses) */}
-					<FadeScrollArea className='max-w-[14rem]'>{subversion}</FadeScrollArea>
-					<FadeScrollArea className='max-w-[10rem] text-[11px] text-muted-foreground'>{address}</FadeScrollArea>
+					{/* Pure CSS truncation instead of per-cell Radix ScrollAreas (avoids mounting ~250 ResizeObservers) */}
+					<span className='max-w-[14rem] truncate' title={subversion}>
+						{subversion}
+					</span>
+					<span className='max-w-[10rem] truncate text-[11px] text-muted-foreground' title={address}>
+						{address}
+					</span>
 				</div>
 			)
 		},

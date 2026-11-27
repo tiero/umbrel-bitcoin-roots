@@ -31,6 +31,10 @@ export function useTransactionSocket(onTxPing: (count: number) => void): void {
 		// harmless "WebSocket is closed before the connection is established" error.
 		// This does not happen in production.
 		ws.onerror = console.error
-		return () => ws.close()
+		return () => {
+			ws.onmessage = null
+			ws.onerror = null
+			ws.close()
+		}
 	}, [data?.token])
 }

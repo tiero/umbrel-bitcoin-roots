@@ -479,8 +479,19 @@ export default function SettingsCard() {
 	// This is so we can show a loading toast if restarting bitcoind is taking longer than X seconds, and then update it to a success or error toast without re-rendering
 	const updateToastId = useRef<string | number | null>(null)
 	const updateTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+	const restoreToastId = useRef<string | number | null>(null)
+	const restoreTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+	// Clear pending restart-toast timers on unmount so navigating away never leaves an infinite toast
+	useEffect(() => {
+		return () => {
+			if (updateTimer.current) clearTimeout(updateTimer.current)
+			if (restoreTimer.current) clearTimeout(restoreTimer.current)
+		}
+	}, [])
 
 	const onUpdateSettings = (data: SettingsSchema) => {
+		if (updateTimer.current) clearTimeout(updateTimer.current)
 		// If the mutation takes longer than 1 second, we show a loading toast
 		updateTimer.current = setTimeout(() => {
 			updateToastId.current = toast.loading('Hang tight, Bitcoin Core is restarting...', {duration: Infinity})
@@ -488,7 +499,7 @@ export default function SettingsCard() {
 
 		updateSettings.mutate(data, {
 			onSuccess: () => {
-				clearTimeout(updateTimer.current!)
+				if (updateTimer.current) clearTimeout(updateTimer.current)
 				const id = updateToastId.current
 				if (id != null) {
 					toast.success('Settings applied', {id, duration: 4000})
@@ -497,7 +508,7 @@ export default function SettingsCard() {
 				}
 			},
 			onError: (err) => {
-				clearTimeout(updateTimer.current!)
+				if (updateTimer.current) clearTimeout(updateTimer.current)
 				const id = updateToastId.current
 				const msg = err instanceof Error ? err.message : 'Unknown error'
 
@@ -514,10 +525,8 @@ export default function SettingsCard() {
 		})
 	}
 
-	const restoreToastId = useRef<string | number | null>(null)
-	const restoreTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-
 	const onRestoreDefaults = () => {
+		if (restoreTimer.current) clearTimeout(restoreTimer.current)
 		// If the mutation takes longer than 1 second, we show a loading toast
 		restoreTimer.current = setTimeout(() => {
 			restoreToastId.current = toast.loading('Hang tight, Bitcoin Core is restarting...', {duration: Infinity})
@@ -525,7 +534,7 @@ export default function SettingsCard() {
 
 		restoreDefaults.mutate(undefined, {
 			onSuccess: () => {
-				clearTimeout(restoreTimer.current!)
+				if (restoreTimer.current) clearTimeout(restoreTimer.current)
 				const id = restoreToastId.current
 				if (id != null) {
 					toast.success('Defaults restored', {id, duration: 4000})
@@ -534,7 +543,7 @@ export default function SettingsCard() {
 				}
 			},
 			onError: (err) => {
-				clearTimeout(restoreTimer.current!)
+				if (restoreTimer.current) clearTimeout(restoreTimer.current)
 				const id = restoreToastId.current
 				const msg = err instanceof Error ? err.message : 'Unknown error'
 				if (id != null) {

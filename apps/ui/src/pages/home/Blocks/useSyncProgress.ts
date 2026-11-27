@@ -1,4 +1,4 @@
-import {useRef, useEffect} from 'react'
+import {useRef, useEffect, useMemo} from 'react'
 import {useSyncStatus} from '@/hooks/useSyncStatus'
 import {syncStage} from '@/lib/sync-progress'
 
@@ -8,6 +8,7 @@ export function useSyncProgress() {
 	const currentHeightRef = useRef(0)
 	const targetHeightRef = useRef(0)
 	const lastUpdateRef = useRef(0)
+	const stage = syncStage(syncStatus)
 
 	useEffect(() => {
 		if (syncStatus?.blockHeight) {
@@ -15,12 +16,15 @@ export function useSyncProgress() {
 		}
 	}, [syncStatus?.blockHeight])
 
-	// Return refs so AnimatedCube can read them in useFrame
-	return {
-		currentHeightRef,
-		targetHeightRef,
-		lastUpdateRef,
-		stage: syncStage(syncStatus),
-		syncStatus,
-	}
+	// Return stable memoized object so AnimatedCube doesn't re-run sync effects every poll
+	return useMemo(
+		() => ({
+			currentHeightRef,
+			targetHeightRef,
+			lastUpdateRef,
+			stage,
+			syncStatus,
+		}),
+		[stage, syncStatus],
+	)
 }
