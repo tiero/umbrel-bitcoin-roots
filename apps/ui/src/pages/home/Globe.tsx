@@ -205,7 +205,7 @@ function LiveGlobeWebGL({width = 650, height = 650}: {width?: number; height?: n
 
 	// load the landmass map
 	useEffect(() => {
-		fetch('/datasets/ne_110m_admin_0_countries.geojson')
+		fetch('/datasets/ne_110m_admin_0_countries.geojson?v=2')
 			.then((res) => res.json())
 			.then(setCountries)
 			.catch((err) => console.error('Failed to load landmass dataset:', err))

@@ -73,10 +73,8 @@ app.register(fastifyStatic, {
 	setHeaders(reply, filePath) {
 		if (filePath.includes(`${path.sep}assets${path.sep}`)) {
 			reply.header('Cache-Control', 'public, max-age=31536000, immutable')
-		} else if (/index\.html(\.(br|gz))?$/.test(filePath)) {
-			reply.header('Cache-Control', 'no-cache')
 		} else {
-			reply.header('Cache-Control', 'public, max-age=86400')
+			reply.header('Cache-Control', 'no-cache')
 		}
 	},
 })
